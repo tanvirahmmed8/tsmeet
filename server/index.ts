@@ -85,10 +85,22 @@ io.on('connection', (socket) => {
 
   // User requests to join a room (waiting room flow)
   socket.on('request-join', async (payload: any) => {
-    const { roomId, userId, userData, isHost } = payload || {};
+    const { roomId, userId, userData, isHost, token: payloadToken } = payload || {};
     if (!roomId || !userId) return;
 
-    if (authenticatedUserId && authenticatedUserId !== String(userId)) {
+    let effectiveAuthenticatedUserId = authenticatedUserId;
+    if (!effectiveAuthenticatedUserId && jwtSecret && typeof payloadToken === 'string' && payloadToken) {
+      try {
+        const decoded = jwt.verify(payloadToken, jwtSecret) as { userId?: string | number };
+        if (decoded?.userId !== undefined && decoded?.userId !== null) {
+          effectiveAuthenticatedUserId = String(decoded.userId);
+        }
+      } catch {
+        socket.emit('auth-error', { message: 'Invalid auth token' });
+      }
+    }
+
+    if (effectiveAuthenticatedUserId && effectiveAuthenticatedUserId !== String(userId)) {
       socket.emit('join-denied', { roomId });
       return;
     }
@@ -105,7 +117,7 @@ io.on('connection', (socket) => {
       const joiningUserId = String(userId);
       const existingHost = roomManager.getHost(roomId);
 
-      if (!existingHost?.socketId && isHost && creatorId === joiningUserId && authenticatedUserId === joiningUserId) {
+      if (!existingHost?.socketId && isHost && creatorId === joiningUserId && effectiveAuthenticatedUserId === joiningUserId) {
         roomManager.setHost(roomId, socket.id, joiningUserId);
       }
 

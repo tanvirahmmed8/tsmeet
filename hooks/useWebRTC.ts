@@ -141,11 +141,13 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       setJoinStatus('pending');
       pendingJoinRef.current = payload;
       if (!socketRef.current || !socketRef.current.connected) return;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       socketRef.current.emit('request-join', {
         roomId,
         userId,
         userData: { name: payload.userName },
         isHost: payload.isHost,
+        token,
       });
       pendingJoinRef.current = null;
     },
@@ -408,11 +410,13 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         console.log('[WebRTC] Connected to signaling server');
 
         if (pendingJoinRef.current) {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
           socketRef.current?.emit('request-join', {
             roomId,
             userId,
             userData: { name: pendingJoinRef.current.userName },
             isHost: pendingJoinRef.current.isHost,
+            token,
           });
           pendingJoinRef.current = null;
         }
@@ -575,6 +579,10 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
 
       socketRef.current.on('error', (err) => {
         console.error('[Socket.IO Error]', err);
+      });
+
+      socketRef.current.on('auth-error', (data: any) => {
+        setError(data?.message || 'Authentication failed for the meeting connection.');
       });
     };
 
