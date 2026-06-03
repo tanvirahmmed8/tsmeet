@@ -1,13 +1,13 @@
-# ConnectFlow - Complete Setup Guide
+# TSMeet - Complete Setup Guide
 
-This guide covers setting up ConnectFlow from scratch, both frontend and backend components.
+This guide covers setting up TSMeet from scratch, including frontend, backend, and recorder worker.
 
 ---
 
 ## Prerequisites
 
 - **Node.js**: v18.0.0 or higher ([download](https://nodejs.org/))
-- **PostgreSQL**: 12 or higher ([download](https://www.postgresql.org/))
+- **MySQL**: 8 or higher
 - **Git**: For cloning and version control
 - **Docker**: Optional, for containerized deployment
 - **A Unix-like system** (Linux/macOS) or WSL for Windows
@@ -19,9 +19,9 @@ This guide covers setting up ConnectFlow from scratch, both frontend and backend
 ### Step 1: Clone or create the project
 
 ```bash
-# Clone the repository (if it exists)
-git clone https://github.com/yourusername/connectflow.git
-cd connectflow
+# Clone the repository
+git clone https://github.com/yourusername/tsmeet.git
+cd tsmeet
 
 # Or use the provided code directly
 ```
@@ -47,15 +47,8 @@ nano .env.local
 **Environment variables for frontend** (`.env.local`):
 
 ```env
-# Frontend App
-NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
-NEXT_PUBLIC_SIGNALING_SERVER=http://localhost:3001
-
-# Coturn Server (optional, for production)
-NEXT_PUBLIC_STUN_SERVER=stun:stun.l.google.com:19302
-NEXT_PUBLIC_TURN_SERVER=turn:your-turn-server.com:3478
-NEXT_PUBLIC_TURN_USERNAME=username
-NEXT_PUBLIC_TURN_PASSWORD=password
+NEXT_PUBLIC_SIGNALING_SERVER=http://localhost:3002
+BACKEND_URL=http://localhost:3002
 ```
 
 ### Step 4: Run the development server
@@ -64,7 +57,7 @@ NEXT_PUBLIC_TURN_PASSWORD=password
 npm run dev
 ```
 
-The frontend will be available at **http://localhost:3000**
+The frontend will be available at **http://localhost:3001**
 
 ---
 
@@ -72,43 +65,17 @@ The frontend will be available at **http://localhost:3000**
 
 ### Step 1: Set up database
 
-#### Option A: Local PostgreSQL
+#### Local MySQL
 
 ```bash
-# On macOS with Homebrew
-brew install postgresql
-brew services start postgresql
-
-# On Ubuntu/Debian
-sudo apt-get install postgresql postgresql-contrib
-sudo service postgresql start
-
-# Create a new database and user
-sudo -u postgres psql
-
-postgres=# CREATE DATABASE videoconference;
-postgres=# CREATE USER videoconf_user WITH PASSWORD 'secure_password';
-postgres=# ALTER ROLE videoconf_user SET client_encoding TO 'utf8';
-postgres=# ALTER ROLE videoconf_user SET default_transaction_isolation TO 'read committed';
-postgres=# GRANT ALL PRIVILEGES ON DATABASE videoconference TO videoconf_user;
-postgres=# \q
-```
-
-#### Option B: Docker PostgreSQL
-
-```bash
-docker run --name videoconf-db \
-  -e POSTGRES_DB=videoconference \
-  -e POSTGRES_USER=videoconf_user \
-  -e POSTGRES_PASSWORD=secure_password \
-  -p 5432:5432 \
-  -d postgres:15
+mysql -u root -p
+CREATE DATABASE videoconference;
 ```
 
 ### Step 2: Server environment setup
 
 ```bash
-# Copy .env.example to .env
+# Copy server/.env.example to server/.env
 cp .env.example .env
 
 # Edit with your database credentials
@@ -119,14 +86,21 @@ nano .env
 
 ```env
 # Database Connection
-DB_USER=videoconf_user
+DB_USER=root
 DB_PASSWORD=secure_password
-DB_HOST=localhost
-DB_PORT=5432
+DB_HOST=127.0.0.1
+DB_PORT=3306
 DB_NAME=videoconference
+DB_POOL_SIZE=10
 
 # JWT Secret (change this!)
 JWT_SECRET=your-super-secret-key-min-32-chars-long
+
+# Recorder worker
+RECORDER_SERVICE_TOKEN=your-long-random-recorder-token
+RECORDER_POLL_INTERVAL_MS=4000
+RECORDER_SERVICE_INSTANCE_ID=tsmeet-recorder-1
+BACKEND_URL=http://127.0.0.1:3002
 
 # Coturn Servers
 TURN_SERVER=turn:stun.l.google.com:3478
@@ -135,9 +109,9 @@ TURN_USERNAME=optional
 TURN_PASSWORD=optional
 
 # Server
-PORT=3001
+PORT=3002
 NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:3001
 ```
 
 ### Step 3: Install backend dependencies
@@ -166,7 +140,15 @@ psql -U videoconf_user -d videoconference -f scripts/init-db.sql
 npm run dev
 ```
 
-The backend will be available at **http://localhost:3001**
+The backend will be available at **http://localhost:3002**
+
+### Step 6: Run the recorder worker
+
+In a separate terminal:
+
+```bash
+npm run recorder:worker
+```
 
 ---
 
@@ -400,7 +382,7 @@ server {
   ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
 
   location / {
-    proxy_pass http://127.0.0.1:3001;
+    proxy_pass http://127.0.0.1:3002;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -416,14 +398,15 @@ Recommended env values for this layout:
 
 Frontend `.env.local`:
 ```env
-NEXT_PUBLIC_FRONTEND_URL=https://app.yourdomain.com
 NEXT_PUBLIC_SIGNALING_SERVER=https://api.yourdomain.com
+BACKEND_URL=https://api.yourdomain.com
 ```
 
 Backend `server/.env`:
 ```env
 FRONTEND_URL=https://app.yourdomain.com
-PORT=3001
+BACKEND_URL=http://127.0.0.1:3002
+PORT=3002
 ```
 
 ---
@@ -452,25 +435,28 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:15
+    image: mysql:8
     environment:
-      POSTGRES_DB: videoconference
-      POSTGRES_USER: videoconf_user
-      POSTGRES_PASSWORD: secure_password
+      MYSQL_DATABASE: videoconference
+      MYSQL_USER: videoconf_user
+      MYSQL_PASSWORD: secure_password
+      MYSQL_ROOT_PASSWORD: root_password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
 
   backend:
     build: ./server
     ports:
-      - "3001:3001"
+      - "3002:3002"
     environment:
       DB_HOST: db
       DB_USER: videoconf_user
       DB_PASSWORD: secure_password
+      DB_PORT: 3306
       DB_NAME: videoconference
+      PORT: 3002
       JWT_SECRET: your-secret-key
       NODE_ENV: production
     depends_on:
@@ -487,7 +473,7 @@ services:
       COTURN_PASSWORD: password
 
 volumes:
-  postgres_data:
+  mysql_data:
 ```
 
 Start with:
@@ -503,7 +489,7 @@ docker-compose up -d
 ### Test Frontend
 
 ```bash
-# Navigate to http://localhost:3000
+# Navigate to http://localhost:3001
 # You should see the landing page
 
 # Test login with demo credentials:
@@ -515,7 +501,7 @@ docker-compose up -d
 
 ```bash
 # Health check
-curl http://localhost:3001/api/health
+curl http://localhost:3002/api/health
 
 # Should return:
 # {"status":"ok","timestamp":"2026-01-29T10:00:00.000Z"}
@@ -526,7 +512,7 @@ curl http://localhost:3001/api/health
 ```javascript
 // In browser console
 const io = await import('socket.io-client').then(m => m.default);
-const socket = io('http://localhost:3001');
+const socket = io('http://localhost:3002');
 socket.on('connect', () => console.log('Connected!'));
 ```
 
@@ -552,10 +538,10 @@ kill -9 <PID>
 
 ```bash
 # Test connection
-psql -U videoconf_user -h localhost -d videoconference
+mysql -u videoconf_user -p -h localhost videoconference
 
-# Check PostgreSQL is running
-sudo systemctl status postgresql
+# Check MySQL is running
+sudo systemctl status mysql
 ```
 
 ### WebRTC Connection Issues
@@ -567,7 +553,7 @@ sudo systemctl status postgresql
 
 ### Socket.IO Connection Fails
 
-1. Verify backend is running: `curl http://localhost:3001/api/health`
+1. Verify backend is running: `curl http://localhost:3002/api/health`
 2. Check CORS configuration in `server/index.ts`
 3. Verify frontend URL in `.env`
 
@@ -582,15 +568,15 @@ sudo systemctl status postgresql
 docker logs -f <container_id>
 
 # Direct
-tail -f /var/log/connectflow/app.log
+tail -f /var/log/tsmeet/app.log
 ```
 
 ### Database Queries
 
-Enable query logging in PostgreSQL:
+Enable query logging in MySQL:
 
 ```sql
-ALTER DATABASE videoconference SET log_statement = 'all';
+SET GLOBAL general_log = 'ON';
 ```
 
 ### Application Monitoring
@@ -600,7 +586,7 @@ ALTER DATABASE videoconference SET log_statement = 'all';
 npm i -g pm2
 
 # Start with PM2
-pm2 start server/index.ts --name "connectflow-backend"
+pm2 start server/index.ts --name "tsmeet-backend"
 pm2 logs
 ```
 
@@ -615,7 +601,7 @@ pm2 logs
 - [ ] Set up rate limiting
 - [ ] Enable CORS properly
 - [ ] Use environment variables for secrets
-- [ ] Enable PostgreSQL authentication
+- [ ] Secure MySQL users and passwords
 - [ ] Set up monitoring and alerts
 - [ ] Regular backups of database
 - [ ] Keep dependencies updated (`npm audit fix`)
@@ -638,9 +624,9 @@ pm2 logs
 ## Support
 
 For issues or questions:
-- GitHub Issues: Report bugs
-- Discord: Join community
-- Email: support@connectflow.dev
+- GitHub Issues: use your repository tracker
+- Discord: use your team or community channel
+- Email: replace with your support address
 
 ---
 

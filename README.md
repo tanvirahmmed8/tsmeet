@@ -1,10 +1,9 @@
-# ConnectFlow
+# TSMeet
 
-**Free, Open-Source Zoom-Like Video Conferencing Platform**
+**Video meetings, scheduling, API access, and server-managed recording**
 
-Build with React, Node.js, MySQL, and WebRTC. No paid SDKs. No vendor lock-in. Fully self-hosted.
+Build with Next.js, Node.js, MySQL, Socket.IO, and WebRTC. Supports meetings, calendars, booking flows, API docs, and recorder-worker based archival recording.
 
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/Node-18%2B-green.svg)
 ![React](https://img.shields.io/badge/React-19.2-blue.svg)
 ![MySQL](https://img.shields.io/badge/MySQL-8%2B-4479A1.svg)
@@ -20,7 +19,7 @@ Build with React, Node.js, MySQL, and WebRTC. No paid SDKs. No vendor lock-in. F
 - ✅ **Media Controls** - Mute/unmute, camera on/off
 - ✅ **Meeting Links** - Invite via shareable link (no accounts needed for guests)
 - ✅ **Secure** - End-to-end encryption ready, self-hosted
-- ✅ **100% Free** - No subscriptions, no limits, no proprietary costs
+- ✅ **Archive Recording** - Recorder worker and recording session management
 
 ---
 
@@ -35,8 +34,8 @@ Build with React, Node.js, MySQL, and WebRTC. No paid SDKs. No vendor lock-in. F
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/connectflow.git
-cd connectflow
+git clone https://github.com/yourusername/tsmeet.git
+cd tsmeet
 
 # 2. Install dependencies
 npm install
@@ -45,20 +44,20 @@ npm install
 cp .env.example .env.local
 # Edit .env.local with your configuration
 
-# 4. Start frontend (http://localhost:3000)
+# 4. Start frontend (http://localhost:3001)
 npm run dev
 
 # 5. In another terminal, start backend
 cd server
 npm install
 npm run dev
-# Runs on http://localhost:3001
+# Runs on http://localhost:3002
 
 # 6. Create MySQL database
 # mysql -u root -p
 # CREATE DATABASE videoconference;
 
-# 7. Open browser and visit http://localhost:3000
+# 7. Open browser and visit http://localhost:3001
 ```
 
 **Test Credentials:**
@@ -135,7 +134,7 @@ Coturn STUN/TURN Server
 | Frontend | React 19 + Next.js 16 | Modern, performant, full-stack |
 | Backend | Node.js + Express | Fast, event-driven architecture |
 | Real-time | WebRTC + Socket.IO | P2P connections, low latency |
-| Database | MySQL | Reliable, open-source, scalable |
+| Database | MySQL | Reliable, scalable, and easy to operate |
 | Auth | JWT + bcryptjs | Stateless, secure sessions |
 | Styling | Tailwind CSS v4 | Utility-first, responsive design |
 | UI Components | shadcn/ui | Beautiful, accessible components |
@@ -181,7 +180,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md#security-considerations) for details.
 
 ## 💰 Cost Analysis
 
-| Service | ConnectFlow | Zoom | Twilio | Daily.co |
+| Service | TSMeet | Zoom | Twilio | Daily.co |
 |---------|-------------|------|--------|----------|
 | 1-to-1 Calls | Free | Free (up to 40 min) | $0.01-0.05/min | $0.10-0.20/min |
 | Group Calls | Free | $15.99/mo | $0.02-0.04/min | $0.25-0.50/min |
@@ -235,7 +234,7 @@ server {
   ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
   location / {
-    proxy_pass http://127.0.0.1:3001;
+    proxy_pass http://127.0.0.1:3002;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -246,19 +245,20 @@ server {
 Environment values for this setup:
 ```env
 # frontend .env.local
-NEXT_PUBLIC_FRONTEND_URL=https://app.yourdomain.com
 NEXT_PUBLIC_SIGNALING_SERVER=https://api.yourdomain.com
+BACKEND_URL=https://api.yourdomain.com
 
 # backend server/.env
 FRONTEND_URL=https://app.yourdomain.com
-PORT=3001
+BACKEND_URL=http://127.0.0.1:3002
+PORT=3002
 ```
 
 ### Docker Compose
 ```bash
 docker-compose up -d
-# Frontend: http://localhost:3000
-# Backend: http://localhost:3001
+# Frontend: http://localhost:3001
+# Backend: http://localhost:3002
 # Database: mysql://localhost:3306/videoconference
 ```
 
@@ -267,7 +267,7 @@ docker-compose up -d
 ## 📖 Usage Guide
 
 ### For Users
-1. Visit [connectflow.dev](https://connectflow.dev) or your self-hosted instance
+1. Visit your TSMeet deployment
 2. Sign up with email and password
 3. Create a new meeting or join an existing one
 4. Share the link with participants
@@ -310,8 +310,8 @@ npm run start
 
 Frontend `.env.local`:
 ```env
-NEXT_PUBLIC_FRONTEND_URL=https://app.yourdomain.com
 NEXT_PUBLIC_SIGNALING_SERVER=https://api.yourdomain.com
+BACKEND_URL=https://api.yourdomain.com
 ```
 
 Backend `server/.env`:
@@ -323,8 +323,12 @@ DB_PASSWORD=your_password
 DB_NAME=videoconference
 JWT_SECRET=change-this
 FRONTEND_URL=https://app.yourdomain.com
-PORT=3001
+BACKEND_URL=http://127.0.0.1:3002
+PORT=3002
 NODE_ENV=production
+RECORDER_SERVICE_TOKEN=change-this-too
+RECORDER_POLL_INTERVAL_MS=4000
+RECORDER_SERVICE_INSTANCE_ID=tsmeet-recorder-1
 ```
 
 ---
@@ -376,16 +380,16 @@ See [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) for full roadmap.
 
 ## 📞 Support
 
-- **Documentation** - [Full guides and API reference](./docs/)
-- **GitHub Issues** - [Report bugs or request features](https://github.com/yourusername/connectflow/issues)
-- **Discord** - [Join our community](https://discord.gg/yourserver)
-- **Email** - support@connectflow.dev
+- **Documentation** - Use the repository docs in this project
+- **GitHub Issues** - Replace with your repository issue tracker if needed
+- **Discord** - Replace with your team or community link if needed
+- **Email** - Replace with your support address
 
 ---
 
 ## 📜 License
 
-ConnectFlow is released under the **MIT License** - free for personal and commercial use.
+TSMeet is provided as a self-hosted application and API platform.
 
 See [LICENSE](./LICENSE) file for details.
 
@@ -394,8 +398,8 @@ See [LICENSE](./LICENSE) file for details.
 ## 👥 Community
 
 - **GitHub Stars** - Give us a star if you like this project ⭐
-- **Contribute** - Help improve ConnectFlow
-- **Spread the Word** - Tell your friends about open-source video conferencing
+- **Contribute** - Improve TSMeet for your deployment or product stack
+- **Operate** - Run frontend, backend, and recorder worker separately
 
 ---
 
@@ -424,9 +428,8 @@ See [LICENSE](./LICENSE) file for details.
 
 Built with inspiration from:
 - [Zoom](https://zoom.us/) - for the user experience
-- [Jitsi Meet](https://jitsi.org/jitsi-meet/) - open-source leadership
+- [Jitsi Meet](https://jitsi.org/jitsi-meet/) - product inspiration
 - [WebRTC community](https://webrtc.org/) - enabling peer-to-peer communication
-- [Open source](https://opensource.org/) - transparency and collaboration
 
 ---
 
@@ -444,20 +447,20 @@ Built with inspiration from:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/connectflow.git
-cd connectflow
+git clone https://github.com/yourusername/tsmeet.git
+cd tsmeet
 
 # Follow the Quick Start guide above
 npm install
 npm run dev
 
-# Visit http://localhost:3000
+# Visit http://localhost:3001
 ```
 
-**No credit card required. No registration. No limits.**
+**Use the frontend, backend, and recorder worker together for full functionality.**
 
 ---
 
-**Built with ❤️ by developers who believe in open-source video conferencing**
+**TSMeet**
 
-*ConnectFlow - The open-source answer to Zoom*
+*Meetings, scheduling, API access, and recording in one stack*

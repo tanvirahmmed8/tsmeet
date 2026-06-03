@@ -8,6 +8,7 @@ interface PeerConnection {
   peerId: string;
   peer: SimplePeer.Instance;
   stream?: MediaStream;
+  hidden?: boolean;
 }
 
 interface WebRTCConfig {
@@ -71,8 +72,8 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const [peers, setPeers] = useState<PeerConnection[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isCameraOn, setIsCameraOn] = useState(true);
-  const [isMicOn, setIsMicOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [backgroundMode, setBackgroundModeState] = useState<BackgroundMode>('none');
   const [backgroundImage, setBackgroundImageState] = useState<string | null>(null);
@@ -87,24 +88,30 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const [meetingEnded, setMeetingEnded] = useState(false);
 
   const applyVideoTrack = useCallback((nextTrack: MediaStreamTrack | null) => {
-    if (!localStreamRef.current || !nextTrack) return;
+    if (!localStreamRef.current) return;
 
     const currentTrack = currentVideoTrackRef.current;
-    if (currentTrack && currentTrack.id === nextTrack.id) return;
+    if (currentTrack && nextTrack && currentTrack.id === nextTrack.id) return;
 
     if (currentTrack) {
       localStreamRef.current.removeTrack(currentTrack);
     }
-    localStreamRef.current.addTrack(nextTrack);
+    if (nextTrack) {
+      localStreamRef.current.addTrack(nextTrack);
+    }
     currentVideoTrackRef.current = nextTrack;
 
     for (const connection of peersRef.current.values()) {
       try {
-        if (currentTrack) {
+        if (currentTrack && nextTrack) {
           connection.peer.replaceTrack(currentTrack, nextTrack, localStreamRef.current);
+        } else if (currentTrack && !nextTrack) {
+          connection.peer.removeTrack(currentTrack, localStreamRef.current);
+        } else if (!currentTrack && nextTrack) {
+          connection.peer.addTrack(nextTrack, localStreamRef.current);
         }
       } catch (err) {
-        console.warn('[WebRTC] replaceTrack failed:', err);
+        console.warn('[WebRTC] video track update failed:', err);
       }
     }
 
@@ -112,24 +119,30 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   }, []);
 
   const applyAudioTrack = useCallback((nextTrack: MediaStreamTrack | null) => {
-    if (!localStreamRef.current || !nextTrack) return;
+    if (!localStreamRef.current) return;
 
     const currentTrack = currentAudioTrackRef.current;
-    if (currentTrack && currentTrack.id === nextTrack.id) return;
+    if (currentTrack && nextTrack && currentTrack.id === nextTrack.id) return;
 
     if (currentTrack) {
       localStreamRef.current.removeTrack(currentTrack);
     }
-    localStreamRef.current.addTrack(nextTrack);
+    if (nextTrack) {
+      localStreamRef.current.addTrack(nextTrack);
+    }
     currentAudioTrackRef.current = nextTrack;
 
     for (const connection of peersRef.current.values()) {
       try {
-        if (currentTrack) {
+        if (currentTrack && nextTrack) {
           connection.peer.replaceTrack(currentTrack, nextTrack, localStreamRef.current);
+        } else if (currentTrack && !nextTrack) {
+          connection.peer.removeTrack(currentTrack, localStreamRef.current);
+        } else if (!currentTrack && nextTrack) {
+          connection.peer.addTrack(nextTrack, localStreamRef.current);
         }
       } catch (err) {
-        console.warn('[WebRTC] replaceAudioTrack failed:', err);
+        console.warn('[WebRTC] audio track update failed:', err);
       }
     }
 
@@ -246,41 +259,22 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     socketRef.current.emit('lower-hand', { roomId });
   }, [roomId]);
 
-  // Get local media stream
   const initializeLocalStream = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      rawStreamRef.current = stream;
-      localStreamRef.current = new MediaStream(stream.getTracks());
-      cameraVideoTrackRef.current = stream.getVideoTracks()[0] || null;
-      currentVideoTrackRef.current = cameraVideoTrackRef.current;
-      micAudioTrackRef.current = stream.getAudioTracks()[0] || null;
-      currentAudioTrackRef.current = micAudioTrackRef.current;
-      // Force a fresh reference so consumers re-assign srcObject when tracks change later.
-      setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
-      return stream;
-    } catch (err) {
-      const errorMessage = `Failed to access media: ${err instanceof Error ? err.message : String(err)}`;
-      setError(errorMessage);
-      console.error(errorMessage);
-      return null;
-    }
+    const rawStream = new MediaStream();
+    const localStream = new MediaStream();
+    rawStreamRef.current = rawStream;
+    localStreamRef.current = localStream;
+    cameraVideoTrackRef.current = null;
+    currentVideoTrackRef.current = null;
+    micAudioTrackRef.current = null;
+    currentAudioTrackRef.current = null;
+    setLocalStream(new MediaStream(localStream.getTracks()));
+    return localStream;
   }, []);
 
   // Create peer connection
   const createPeerConnection = useCallback(
-    (peerId: string, initiator: boolean, stream: MediaStream) => {
+    (peerId: string, initiator: boolean, stream: MediaStream, options?: { hidden?: boolean }) => {
       const iceServers = config.iceServers || [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
@@ -323,7 +317,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         const connection = peersRef.current.get(peerId);
         if (connection) {
           connection.stream = stream;
-          setPeers(Array.from(peersRef.current.values()));
+          setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
         }
       });
 
@@ -336,9 +330,9 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         removePeerConnection(peerId);
       });
 
-      const connection: PeerConnection = { peerId, peer };
+      const connection: PeerConnection = { peerId, peer, hidden: options?.hidden ?? false };
       peersRef.current.set(peerId, connection);
-      setPeers(Array.from(peersRef.current.values()));
+      setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
 
       return peer;
     },
@@ -351,7 +345,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     if (connection) {
       connection.peer.destroy();
       peersRef.current.delete(peerId);
-      setPeers(Array.from(peersRef.current.values()));
+      setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
     }
   }, []);
 
@@ -507,9 +501,14 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         if (!approvedRef.current) return;
         const peer = peersRef.current.get(data.socketId)?.peer;
         if (!peer) {
-          createPeerConnection(data.socketId, false, localStreamRef.current || stream);
+          createPeerConnection(data.socketId, false, localStreamRef.current || stream, {
+            hidden: Boolean(data.hidden),
+          });
         }
         const connection = peersRef.current.get(data.socketId);
+        if (connection && data.hidden) {
+          connection.hidden = true;
+        }
         if (connection) {
           connection.peer.signal(data.offer);
         }
@@ -565,10 +564,11 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       });
 
       socketRef.current.on('force-video-off', () => {
-        if (localStreamRef.current) {
-          localStreamRef.current.getVideoTracks().forEach((track) => {
-            track.enabled = false;
-          });
+        if (rawStreamRef.current && cameraVideoTrackRef.current) {
+          applyVideoTrack(null);
+          rawStreamRef.current.removeTrack(cameraVideoTrackRef.current);
+          cameraVideoTrackRef.current.stop();
+          cameraVideoTrackRef.current = null;
         }
         setIsCameraOn(false);
       });
@@ -612,7 +612,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         socketRef.current.disconnect();
       }
     };
-  }, [roomId, userId, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom]);
+  }, [roomId, userId, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack]);
 
   const ensureSegmentation = useCallback(async () => {
     if (segmentationRef.current) return segmentationRef.current;
@@ -843,6 +843,16 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       }
       await startScreenShare(includeDeviceAudio);
     } catch (err) {
+      const isUserCancelled =
+        (err instanceof DOMException && err.name === 'NotAllowedError') ||
+        (err instanceof Error &&
+          /permission denied|denied by user|not allowed/i.test(err.message));
+
+      if (isUserCancelled) {
+        setError(null);
+        return;
+      }
+
       const errorMessage = `Failed to start screen share: ${err instanceof Error ? err.message : String(err)}`;
       setError(errorMessage);
       console.error(errorMessage);
@@ -850,44 +860,217 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   }, [isScreenSharing, startScreenShare, stopScreenShare]);
 
   // Toggle camera
-  const toggleCamera = useCallback(() => {
-    if (localStreamRef.current) {
-      const videoTracks = localStreamRef.current.getVideoTracks();
-      videoTracks.forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsCameraOn(!isCameraOn);
+  const toggleCamera = useCallback(async () => {
+    if (!localStreamRef.current || !rawStreamRef.current) return;
 
-      if (socketRef.current) {
-        socketRef.current.emit('toggle-camera', {
-          roomId,
-          enabled: !isCameraOn,
-        });
+    if (isCameraOn) {
+      const currentCameraTrack = cameraVideoTrackRef.current;
+      if (currentCameraTrack) {
+        applyVideoTrack(null);
+        rawStreamRef.current.removeTrack(currentCameraTrack);
+        currentCameraTrack.stop();
       }
+      cameraVideoTrackRef.current = null;
+
+      if (processedVideoTrackRef.current) {
+        processedVideoTrackRef.current.stop();
+        processedVideoTrackRef.current = null;
+      }
+      if (effectRafRef.current) {
+        cancelAnimationFrame(effectRafRef.current);
+        effectRafRef.current = null;
+      }
+
+      setIsCameraOn(false);
+      if (socketRef.current) {
+        socketRef.current.emit('toggle-camera', { roomId, enabled: false });
+      }
+      return;
     }
-  }, [isCameraOn, roomId]);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+      const nextTrack = stream.getVideoTracks()[0] || null;
+      if (!nextTrack) {
+        throw new Error('No video track available.');
+      }
+
+      cameraVideoTrackRef.current = nextTrack;
+      rawStreamRef.current.addTrack(nextTrack);
+
+      if (backgroundModeRef.current !== 'none' && !isScreenSharing) {
+        if (effectVideoRef.current) {
+          effectVideoRef.current.srcObject = rawStreamRef.current;
+          await effectVideoRef.current.play().catch(() => undefined);
+        }
+        await startBackgroundEffect();
+      } else {
+        applyVideoTrack(nextTrack);
+      }
+
+      setIsCameraOn(true);
+      setError(null);
+      if (socketRef.current) {
+        socketRef.current.emit('toggle-camera', { roomId, enabled: true });
+      }
+    } catch (err) {
+      const errorMessage = `Failed to access camera: ${err instanceof Error ? err.message : String(err)}`;
+      setError(errorMessage);
+      console.error(errorMessage);
+    }
+  }, [applyVideoTrack, isCameraOn, isScreenSharing, roomId, startBackgroundEffect]);
 
   // Toggle microphone
-  const toggleMicrophone = useCallback(() => {
+  const toggleMicrophone = useCallback(async () => {
     if (isMutedByHost) {
       setError('You are muted by the host. Request to unmute to turn your mic back on.');
       return;
     }
-    if (localStreamRef.current) {
-      const audioTracks = localStreamRef.current.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsMicOn(!isMicOn);
+    if (!localStreamRef.current || !rawStreamRef.current) return;
+
+    if (isMicOn) {
+      const currentMicTrack = micAudioTrackRef.current;
+      if (currentMicTrack) {
+        if (!screenAudioTrackRef.current) {
+          applyAudioTrack(null);
+        }
+        rawStreamRef.current.removeTrack(currentMicTrack);
+        currentMicTrack.stop();
+      }
+      micAudioTrackRef.current = null;
+      setIsMicOn(false);
 
       if (socketRef.current) {
-        socketRef.current.emit('toggle-microphone', {
-          roomId,
-          enabled: !isMicOn,
-        });
+        socketRef.current.emit('toggle-microphone', { roomId, enabled: false });
       }
+      return;
     }
-  }, [isMicOn, roomId, isMutedByHost]);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      const nextTrack = stream.getAudioTracks()[0] || null;
+      if (!nextTrack) {
+        throw new Error('No audio track available.');
+      }
+
+      micAudioTrackRef.current = nextTrack;
+      rawStreamRef.current.addTrack(nextTrack);
+      if (!screenAudioTrackRef.current) {
+        applyAudioTrack(nextTrack);
+      }
+
+      setIsMicOn(true);
+      setError(null);
+      if (socketRef.current) {
+        socketRef.current.emit('toggle-microphone', { roomId, enabled: true });
+      }
+    } catch (err) {
+      const errorMessage = `Failed to access microphone: ${err instanceof Error ? err.message : String(err)}`;
+      setError(errorMessage);
+      console.error(errorMessage);
+    }
+  }, [applyAudioTrack, isMicOn, roomId, isMutedByHost]);
+
+  const switchCameraInput = useCallback(async (deviceId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      const nextTrack = stream.getVideoTracks()[0] || null;
+      if (!nextTrack) {
+        throw new Error('No video track available from the selected camera.');
+      }
+
+      nextTrack.enabled = isCameraOn;
+
+      const previousCameraTrack = cameraVideoTrackRef.current;
+      cameraVideoTrackRef.current = nextTrack;
+
+      if (rawStreamRef.current && previousCameraTrack) {
+        rawStreamRef.current.removeTrack(previousCameraTrack);
+      }
+      if (rawStreamRef.current) {
+        rawStreamRef.current.addTrack(nextTrack);
+      }
+
+      if (effectVideoRef.current && rawStreamRef.current) {
+        effectVideoRef.current.srcObject = rawStreamRef.current;
+        await effectVideoRef.current.play().catch(() => undefined);
+      }
+
+      if (!screenVideoTrackRef.current && backgroundModeRef.current === 'none') {
+        applyVideoTrack(nextTrack);
+      }
+
+      previousCameraTrack?.stop();
+      setError(null);
+    } catch (err) {
+      const errorMessage = `Failed to switch camera: ${err instanceof Error ? err.message : String(err)}`;
+      setError(errorMessage);
+      console.error(errorMessage);
+    }
+  }, [applyVideoTrack, isCameraOn]);
+
+  const switchMicrophoneInput = useCallback(async (deviceId: string) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: { exact: deviceId },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+
+      const nextTrack = stream.getAudioTracks()[0] || null;
+      if (!nextTrack) {
+        throw new Error('No audio track available from the selected microphone.');
+      }
+
+      nextTrack.enabled = isMicOn;
+
+      const previousMicTrack = micAudioTrackRef.current;
+      micAudioTrackRef.current = nextTrack;
+
+      if (rawStreamRef.current && previousMicTrack) {
+        rawStreamRef.current.removeTrack(previousMicTrack);
+      }
+      if (rawStreamRef.current) {
+        rawStreamRef.current.addTrack(nextTrack);
+      }
+
+      if (!screenAudioTrackRef.current) {
+        applyAudioTrack(nextTrack);
+      }
+
+      previousMicTrack?.stop();
+      setError(null);
+    } catch (err) {
+      const errorMessage = `Failed to switch microphone: ${err instanceof Error ? err.message : String(err)}`;
+      setError(errorMessage);
+      console.error(errorMessage);
+    }
+  }, [applyAudioTrack, isMicOn]);
 
   const transferHost = useCallback((targetSocketId: string) => {
     if (!socketRef.current) return;
@@ -954,6 +1137,8 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     lowerHand,
     toggleCamera,
     toggleMicrophone,
+    switchCameraInput,
+    switchMicrophoneInput,
     toggleScreenShare,
     leaveRoom,
     meetingEnded,

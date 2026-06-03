@@ -34,19 +34,31 @@ function normalizeSql(sql: string) {
 
 function parseReturning(sql: string) {
   const compact = sql.replace(/\s+/g, ' ').trim();
-  const insertMatch = compact.match(/^INSERT INTO\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\).*RETURNING\s+\*/i);
+  const insertMatch = compact.match(
+    /^INSERT INTO\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\).*RETURNING\s+(.+)$/i
+  );
   if (insertMatch) {
     const table = insertMatch[1];
     const columns = insertMatch[2].split(',').map((c) => c.trim().replace(/`/g, ''));
+    const returningFields = insertMatch[3]
+      .split(',')
+      .map((field) => field.trim())
+      .filter(Boolean);
     const idIndex = columns.findIndex((c) => c.toLowerCase() === 'id');
-    return { type: 'insert' as const, table, idIndex };
+    return { type: 'insert' as const, table, idIndex, returningFields };
   }
 
-  const updateMatch = compact.match(/^UPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*).*WHERE\s+id\s*=\s*\$(\d+)\s+RETURNING\s+\*/i);
+  const updateMatch = compact.match(
+    /^UPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*).*WHERE\s+id\s*=\s*\$(\d+)\s+RETURNING\s+(.+)$/i
+  );
   if (updateMatch) {
     const table = updateMatch[1];
     const idParamOneBased = Number(updateMatch[2]);
-    return { type: 'update' as const, table, idParamOneBased };
+    const returningFields = updateMatch[3]
+      .split(',')
+      .map((field) => field.trim())
+      .filter(Boolean);
+    return { type: 'update' as const, table, idParamOneBased, returningFields };
   }
 
   return null;
@@ -54,16 +66,24 @@ function parseReturning(sql: string) {
 
 async function queryCompat<T = any>(sql: string, params: any[] = []): Promise<QueryResult<T>> {
   const returning = parseReturning(sql);
-  const sqlWithoutReturning = sql.replace(/\s+RETURNING\s+\*/i, '');
+  const sqlWithoutReturning = sql.replace(/\s+RETURNING\s+.+$/i, '');
   const mysqlSql = normalizeSql(sqlWithoutReturning);
 
   if (returning?.type === 'insert') {
-    await rawPool.execute(mysqlSql, params);
-    const idParam = returning.idIndex >= 0 ? params[returning.idIndex] : undefined;
+    const [result] = await rawPool.execute<ResultSetHeader>(mysqlSql, params);
+    const idParam =
+      returning.idIndex >= 0 ? params[returning.idIndex] : result.insertId || undefined;
     if (idParam === undefined || idParam === null) {
       return { rows: [], rowCount: 0 };
     }
-    const [rows] = await rawPool.execute<RowDataPacket[]>(`SELECT * FROM ${returning.table} WHERE id = ?`, [idParam]);
+    const selectFields =
+      returning.returningFields.length === 1 && returning.returningFields[0] === '*'
+        ? '*'
+        : returning.returningFields.join(', ');
+    const [rows] = await rawPool.execute<RowDataPacket[]>(
+      `SELECT ${selectFields} FROM ${returning.table} WHERE id = ?`,
+      [idParam]
+    );
     return { rows: rows as T[], rowCount: (rows as RowDataPacket[]).length };
   }
 
@@ -73,7 +93,14 @@ async function queryCompat<T = any>(sql: string, params: any[] = []): Promise<Qu
     if (idParam === undefined || idParam === null) {
       return { rows: [], rowCount: 0 };
     }
-    const [rows] = await rawPool.execute<RowDataPacket[]>(`SELECT * FROM ${returning.table} WHERE id = ?`, [idParam]);
+    const selectFields =
+      returning.returningFields.length === 1 && returning.returningFields[0] === '*'
+        ? '*'
+        : returning.returningFields.join(', ');
+    const [rows] = await rawPool.execute<RowDataPacket[]>(
+      `SELECT ${selectFields} FROM ${returning.table} WHERE id = ?`,
+      [idParam]
+    );
     return { rows: rows as T[], rowCount: (rows as RowDataPacket[]).length };
   }
 
@@ -230,6 +257,55 @@ export const initializeDatabase = async () => {
     await createIndexIfMissing('calendar_holidays', 'idx_calendar_holidays_calendar_id', 'calendar_id');
     await createIndexIfMissing('calendar_bookings', 'idx_calendar_bookings_calendar_id', 'calendar_id');
     await createIndexIfMissing('calendar_bookings', 'idx_calendar_bookings_slot_start_at', 'slot_start_at');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recordings (
+        id CHAR(36) PRIMARY KEY,
+        room_id CHAR(36) NOT NULL,
+        creator_id INT NOT NULL,
+        started_by_user_id INT NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'recording',
+        video_path VARCHAR(191) NULL,
+        audio_path VARCHAR(191) NULL,
+        video_size_bytes BIGINT NULL,
+        audio_size_bytes BIGINT NULL,
+        mime_type_video VARCHAR(64) NULL,
+        mime_type_audio VARCHAR(64) NULL,
+        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await createIndexIfMissing('recordings', 'idx_recordings_room_id', 'room_id');
+    await createIndexIfMissing('recordings', 'idx_recordings_creator_id', 'creator_id');
+    await createIndexIfMissing('recordings', 'idx_recordings_started_at', 'started_at');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recording_sessions (
+        id CHAR(36) PRIMARY KEY,
+        room_id CHAR(36) NOT NULL,
+        creator_id INT NOT NULL,
+        started_by_user_id INT NOT NULL,
+        status VARCHAR(32) NOT NULL,
+        hidden_recorder_socket_id VARCHAR(191) NULL,
+        recorder_service_instance_id VARCHAR(191) NULL,
+        started_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        completed_at DATETIME NULL,
+        last_heartbeat_at DATETIME NULL,
+        failure_reason TEXT,
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_room_id', 'room_id');
+    await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_status', 'status');
+    await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_started_at', 'started_at');
 
     // Chat messages table
     await pool.query(`

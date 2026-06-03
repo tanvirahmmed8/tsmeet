@@ -4,16 +4,30 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
+import path from 'path';
 import authRoutes from './routes/auth';
 import roomRoutes from './routes/rooms';
 import calendarRoutes from './routes/calendars';
 import bookingRoutes from './routes/bookings';
+import {
+  createUserRecordingRoutes,
+  createRecorderServiceRoutes,
+} from './routes/recordings';
 import publicCalendarRoutes from './routes/publicCalendars';
 import { initializeDatabase, pool } from './db';
 import { authenticateToken } from './middleware/auth';
 import { RoomManager } from './services/roomManager';
+import { RecordingSessionManager } from './services/recordingSessionManager';
 
 dotenv.config();
+
+function requireEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,6 +51,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use('/recorder-assets', express.static(path.join(process.cwd(), 'public', 'recorder')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -50,8 +65,81 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/recorder/:sessionId', (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'recorder', 'index.html'));
+});
+
 // WebSocket/Socket.IO Events
 const roomManager = new RoomManager();
+const recordingSessionManager = new RecordingSessionManager();
+
+async function persistRecordingSessionState(sessionId: string) {
+  const session = recordingSessionManager.getSession(sessionId);
+  if (!session) return;
+
+  await pool.query(
+    `INSERT INTO recording_sessions
+      (id, room_id, creator_id, started_by_user_id, status, hidden_recorder_socket_id, recorder_service_instance_id, started_at, updated_at, completed_at, last_heartbeat_at, failure_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     ON DUPLICATE KEY UPDATE
+       status = VALUES(status),
+       hidden_recorder_socket_id = VALUES(hidden_recorder_socket_id),
+       recorder_service_instance_id = VALUES(recorder_service_instance_id),
+       updated_at = VALUES(updated_at),
+       completed_at = VALUES(completed_at),
+       last_heartbeat_at = VALUES(last_heartbeat_at),
+       failure_reason = VALUES(failure_reason)`,
+    [
+      session.id,
+      session.roomId,
+      Number(session.creatorId),
+      Number(session.startedByUserId),
+      session.status,
+      session.hiddenRecorderSocketId || null,
+      session.recorderServiceInstanceId || null,
+      session.startedAt,
+      session.updatedAt,
+      session.completedAt || null,
+      session.lastHeartbeatAt || null,
+      session.failureReason || null,
+    ]
+  );
+}
+
+async function hydrateRecordingSessionsFromDatabase() {
+  const result = await pool.query<any>(
+    `SELECT *
+     FROM recording_sessions
+     WHERE status IN ('awaiting_recorder', 'recording', 'paused', 'stopping')
+     ORDER BY started_at ASC`
+  );
+
+  result.rows.forEach((row) => {
+    recordingSessionManager.hydrateSession({
+      id: String(row.id),
+      roomId: String(row.room_id),
+      creatorId: String(row.creator_id),
+      startedByUserId: String(row.started_by_user_id),
+      status: row.status,
+      hiddenRecorderSocketId: null,
+      recorderServiceInstanceId: row.recorder_service_instance_id
+        ? String(row.recorder_service_instance_id)
+        : null,
+      startedAt: new Date(row.started_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+      completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+      lastHeartbeatAt: row.last_heartbeat_at ? new Date(row.last_heartbeat_at).toISOString() : null,
+      failureReason: row.failure_reason ? String(row.failure_reason) : null,
+    });
+  });
+
+  if (result.rows.length > 0) {
+    console.log(`♻️ Recovered ${result.rows.length} unfinished recording session(s) from MySQL`);
+  }
+}
+
+app.use('/api/recordings', authenticateToken, createUserRecordingRoutes(io, recordingSessionManager));
+app.use('/api/recording-service', createRecorderServiceRoutes(io, recordingSessionManager));
 
 io.on('connection', (socket) => {
   console.log('[WebSocket] User connected:', socket.id);
@@ -77,6 +165,12 @@ io.on('connection', (socket) => {
 
   const emitHostChange = (roomId: string, hostSocketId: string | null, hostUserId: string | null) => {
     io.to(roomId).emit('host-changed', { hostSocketId, hostUserId });
+  };
+  const emitRecordingSession = (roomId: string) => {
+    io.to(roomId).emit('recording-session-updated', recordingSessionManager.getActiveSessionForRoom(roomId));
+  };
+  const emitVisibleParticipants = (roomId: string) => {
+    io.to(roomId).emit('visible-participants-updated', roomManager.getVisibleParticipants(roomId));
   };
 
   const isParticipant = (roomId: string, socketId: string) => Boolean(roomManager.getParticipant(roomId, socketId));
@@ -130,7 +224,7 @@ io.on('connection', (socket) => {
 
         socket.emit('join-approved', { roomId, isHost: true });
 
-        const participants = roomManager.getRoomParticipants(roomId);
+        const participants = roomManager.getVisibleParticipants(roomId);
         socket.emit('room-participants', participants.filter((p) => p.socketId !== socket.id));
 
         socket.to(roomId).emit('user-joined', {
@@ -140,6 +234,8 @@ io.on('connection', (socket) => {
         });
 
         emitHostChange(roomId, socket.id, joiningUserId);
+        emitVisibleParticipants(roomId);
+        emitRecordingSession(roomId);
 
         roomManager.getPending(roomId).forEach((pendingRequest) => {
           socket.emit('join-request', {
@@ -172,6 +268,28 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('join-recorder', (payload: any) => {
+    const { roomId, sessionId, serviceInstanceId, serviceToken } = payload || {};
+    const expectedToken = process.env.RECORDER_SERVICE_TOKEN?.trim();
+
+    if (!roomId || !sessionId || !serviceInstanceId) return;
+    if (!expectedToken || String(serviceToken || '') !== expectedToken) {
+      socket.emit('recorder-join-denied', { roomId, sessionId });
+      return;
+    }
+
+    const session = recordingSessionManager.getSession(String(sessionId));
+    if (!session || session.roomId !== String(roomId)) {
+      socket.emit('recorder-join-denied', { roomId, sessionId });
+      return;
+    }
+
+    socket.join(roomId);
+    roomManager.addHiddenRecorder(roomId, socket.id, String(serviceInstanceId));
+    socket.emit('room-participants', roomManager.getVisibleParticipants(roomId));
+    socket.emit('recorder-joined', { roomId, sessionId, socketId: socket.id });
+  });
+
   const approveUser = (roomId: string, targetSocketId: string) => {
     const pending = roomManager.getPendingBySocket(roomId, targetSocketId);
     if (!pending) return;
@@ -186,7 +304,7 @@ io.on('connection', (socket) => {
 
     targetSocket.emit('join-approved', { roomId, isHost: false });
 
-    const participants = roomManager.getRoomParticipants(roomId);
+    const participants = roomManager.getVisibleParticipants(roomId);
     targetSocket.emit('room-participants', participants.filter((p) => p.socketId !== targetSocketId));
 
     targetSocket.to(roomId).emit('user-joined', {
@@ -194,6 +312,8 @@ io.on('connection', (socket) => {
       socketId: targetSocketId,
       userData: pending.userData,
     });
+
+    emitVisibleParticipants(roomId);
   };
 
   socket.on('approve-join', (payload: any) => {
@@ -316,9 +436,11 @@ io.on('connection', (socket) => {
   socket.on('send-offer', (data: any) => {
     const { roomId, targetSocketId, offer } = data;
     if (!roomId || !targetSocketId || !isParticipantAndTargetInRoom(roomId, targetSocketId)) return;
+    const sender = roomManager.getParticipant(roomId, socket.id);
     io.to(targetSocketId).emit('receive-offer', {
       socketId: socket.id,
       offer,
+      hidden: Boolean(sender?.hidden),
     });
   });
 
@@ -326,9 +448,11 @@ io.on('connection', (socket) => {
   socket.on('send-answer', (data: any) => {
     const { roomId, targetSocketId, answer } = data;
     if (!roomId || !targetSocketId || !isParticipantAndTargetInRoom(roomId, targetSocketId)) return;
+    const sender = roomManager.getParticipant(roomId, socket.id);
     io.to(targetSocketId).emit('receive-answer', {
       socketId: socket.id,
       answer,
+      hidden: Boolean(sender?.hidden),
     });
   });
 
@@ -336,9 +460,11 @@ io.on('connection', (socket) => {
   socket.on('send-ice-candidate', (data: any) => {
     const { roomId, targetSocketId, candidate } = data;
     if (!roomId || !targetSocketId || !isParticipantAndTargetInRoom(roomId, targetSocketId)) return;
+    const sender = roomManager.getParticipant(roomId, socket.id);
     io.to(targetSocketId).emit('receive-ice-candidate', {
       socketId: socket.id,
       candidate,
+      hidden: Boolean(sender?.hidden),
     });
   });
 
@@ -407,7 +533,10 @@ io.on('connection', (socket) => {
 
       emitHostChange(change.roomId, null, null);
     });
-    socket.to(roomId).emit('user-left', { socketId: socket.id, userId: participant?.userId || userId });
+    if (!participant?.hidden) {
+      socket.to(roomId).emit('user-left', { socketId: socket.id, userId: participant?.userId || userId });
+      emitVisibleParticipants(roomId);
+    }
     socket.leave(roomId);
     console.log(`[Room ${roomId}] User ${participant?.userId || userId} left`);
   });
@@ -421,6 +550,16 @@ io.on('connection', (socket) => {
 
     try {
       await pool.query('UPDATE rooms SET ended_at = NOW() WHERE id = $1 AND ended_at IS NULL', [roomId]);
+      const session = recordingSessionManager.getActiveSessionForRoom(roomId);
+      if (session) {
+        const stopped = recordingSessionManager.stopSession(session.id);
+        if (stopped) {
+          void persistRecordingSessionState(stopped.id).catch((error) => {
+            console.error(`[Room ${roomId}] Failed to persist stopped recording session:`, error);
+          });
+          emitRecordingSession(roomId);
+        }
+      }
       io.to(roomId).emit('meeting-ended', { roomId });
       roomManager.endRoom(roomId);
 
@@ -438,6 +577,13 @@ io.on('connection', (socket) => {
 
   // User disconnects
   socket.on('disconnect', () => {
+    const participant = roomManager.getAllRooms()
+      .flatMap((room) => roomManager.getRoomParticipants(room.roomId))
+      .find((entry) => entry.socketId === socket.id);
+    const participantRoomId = roomManager
+      .getAllRooms()
+      .find((room) => roomManager.getParticipant(room.roomId, socket.id))?.roomId;
+
     roomManager.removeUserBySocketId(socket.id);
     const hostChanges = roomManager.handleHostDisconnect(socket.id);
     hostChanges.forEach((change) => {
@@ -447,6 +593,15 @@ io.on('connection', (socket) => {
         emitHostChange(change.roomId, null, null);
       }
     });
+    if (participantRoomId && !participant?.hidden) {
+      emitVisibleParticipants(participantRoomId);
+    }
+    recordingSessionManager.releaseRecorderSocket(socket.id).forEach((session) => {
+      void persistRecordingSessionState(session.id).catch((error) => {
+        console.error(`[Room ${session.roomId}] Failed to persist released recorder session:`, error);
+      });
+      emitRecordingSession(session.roomId);
+    });
     console.log('[WebSocket] User disconnected:', socket.id);
   });
 });
@@ -454,7 +609,9 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3002;
 
 async function start() {
+  requireEnv('JWT_SECRET');
   await initializeDatabase();
+  await hydrateRecordingSessionsFromDatabase();
 
   httpServer.listen(PORT, () => {
     console.log(`🚀 Signaling server running on port ${PORT}`);

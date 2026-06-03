@@ -2,7 +2,7 @@
 
 Canonical source for backend HTTP + realtime contracts in this repo.
 
-Base backend URL (local): `http://localhost:3001`
+Base backend URL (local): `http://localhost:3002`
 
 Auth:
 - Protected endpoints require `Authorization: Bearer <jwt>`
@@ -19,7 +19,8 @@ Auth:
 - Calendar types (`personal`, `event`, `round_robin`): `REST backend`
 - Calendar auto-record prompt flag (`settings.autoRecordMeeting`): `REST backend` (controls room-start prompt behavior)
 - Round-robin assignee resolution (id/email + per-member availability): `REST backend`
-- Meeting recording controls (host start/pause/resume/stop): `Frontend only (browser MediaRecorder)`
+- Meeting recording controls (host start/pause/resume/stop): `REST backend session manager`
+- Hidden recorder worker orchestration: `REST backend + Socket.IO hidden participant`
 - Screen share with optional device audio: `Frontend media capture + WebRTC track replace`
 
 ---
@@ -110,6 +111,190 @@ Response `200`:
 ```json
 { "message": "Room ended successfully" }
 ```
+
+---
+
+### Recording Sessions (Protected Host API)
+
+Recording is now modeled as a backend session lifecycle. The web client only controls the session. A separate recorder worker is expected to claim the session and join the room as a hidden participant.
+
+Session statuses:
+- `awaiting_recorder`
+- `recording`
+- `paused`
+- `stopping`
+- `completed`
+- `failed`
+
+### GET `/api/recordings/rooms/:roomId/active`
+Returns the active recording session for a room owned by the authenticated user.
+
+Response `200`:
+```json
+{
+  "session": {
+    "id": "uuid",
+    "roomId": "uuid",
+    "creatorId": "1",
+    "startedByUserId": "1",
+    "status": "awaiting_recorder",
+    "hiddenRecorderSocketId": null,
+    "recorderServiceInstanceId": null,
+    "startedAt": "2026-06-03T12:00:00.000Z",
+    "updatedAt": "2026-06-03T12:00:00.000Z",
+    "completedAt": null,
+    "lastHeartbeatAt": null,
+    "failureReason": null
+  }
+}
+```
+
+### GET `/api/recordings/sessions/:sessionId`
+Returns a single session if the authenticated user owns the room.
+
+### POST `/api/recordings/sessions/start`
+Body:
+```json
+{ "roomId": "uuid" }
+```
+
+Response `201`:
+```json
+{
+  "id": "uuid",
+  "roomId": "uuid",
+  "creatorId": "1",
+  "startedByUserId": "1",
+  "status": "awaiting_recorder"
+}
+```
+
+### POST `/api/recordings/sessions/:sessionId/pause`
+Pauses an active session.
+
+### POST `/api/recordings/sessions/:sessionId/resume`
+Resumes a paused session.
+
+### POST `/api/recordings/sessions/:sessionId/stop`
+Moves a session into `stopping`. The recorder worker should finalize and then call `complete` or `fail`.
+
+### GET `/api/recordings`
+Lists archived recordings owned by the authenticated user.
+
+Response `200`:
+```json
+[
+  {
+    "id": "uuid",
+    "room_id": "uuid",
+    "room_title": "Team sync",
+    "status": "ready",
+    "started_at": "2026-06-03T12:00:00.000Z",
+    "completed_at": "2026-06-03T12:45:00.000Z",
+    "video_path": "storage/recordings/uuid-video.webm",
+    "audio_path": "storage/recordings/uuid-audio.webm"
+  }
+]
+```
+
+### GET `/api/recordings/:recordingId/video`
+Downloads the archived video artifact for a completed recording.
+
+### GET `/api/recordings/:recordingId/audio`
+Downloads the archived audio artifact for a completed recording.
+
+### DELETE `/api/recordings/:recordingId`
+Deletes a recording archive row plus any saved video/audio files owned by the authenticated user.
+
+Response `200`:
+```json
+{ "message": "Recording deleted successfully" }
+```
+
+### Recorder Service API
+
+These endpoints are for the hidden recorder worker, not for end users.
+
+Auth:
+- `Authorization: Bearer <RECORDER_SERVICE_TOKEN>`
+- or `x-recorder-service-token: <RECORDER_SERVICE_TOKEN>`
+
+### GET `/api/recording-service/sessions/claimable`
+Lists sessions currently in `awaiting_recorder`.
+
+### POST `/api/recording-service/sessions/:sessionId/claim`
+Body:
+```json
+{
+  "serviceInstanceId": "recorder-worker-1",
+  "recorderSocketId": "socket-id"
+}
+```
+
+Effect:
+- assigns the worker to the session
+- stores the hidden recorder socket id
+- changes status to `recording`
+
+### POST `/api/recording-service/sessions/:sessionId/heartbeat`
+Body:
+```json
+{ "serviceInstanceId": "recorder-worker-1" }
+```
+
+### PUT `/api/recording-service/sessions/:sessionId/artifacts/video`
+Raw request body:
+- content type: worker recorder mime type, typically `video/webm`
+
+### PUT `/api/recording-service/sessions/:sessionId/artifacts/audio`
+Raw request body:
+- content type: worker recorder mime type, typically `audio/webm`
+
+### POST `/api/recording-service/sessions/:sessionId/complete`
+Marks the session `completed`.
+
+### POST `/api/recording-service/sessions/:sessionId/fail`
+Body:
+```json
+{ "reason": "ffmpeg pipeline exited unexpectedly" }
+```
+
+Marks the session `failed`.
+
+### Hidden Recorder Socket Contract
+
+Socket event:
+- `join-recorder`
+
+Payload:
+```json
+{
+  "roomId": "uuid",
+  "sessionId": "uuid",
+  "serviceInstanceId": "recorder-worker-1",
+  "serviceToken": "<RECORDER_SERVICE_TOKEN>"
+}
+```
+
+Behavior:
+- backend joins the recorder socket to the room
+- recorder is added as a hidden participant
+- recorder is excluded from visible participant lists
+- recorder can continue recording even if the host disconnects, as long as the meeting itself continues
+
+### Recorder Worker Runtime
+
+This repo now includes a server-side worker launcher:
+- run from `server/`
+- `npm run recorder:worker`
+
+Behavior:
+- polls `/api/recording-service/sessions/claimable`
+- opens a backend-served hidden browser page at `/recorder/:sessionId`
+- page joins with `join-recorder`
+- page records remote media composite and audio mix
+- page uploads video/audio artifacts through the recorder-service API
+- backend startup reloads unfinished `recording_sessions` rows from MySQL so workers can reclaim them after restart
 
 ---
 
@@ -394,6 +579,7 @@ Client -> Server:
 - `stop-screen-share` `{ roomId }` (legacy event currently unused by hook)
 - `leave-room` `(roomId, userId)`
 - `end-meeting` `{ roomId }`
+- `join-recorder` `{ roomId, sessionId, serviceInstanceId, serviceToken }`
 
 Server -> Client:
 - `join-pending` `{ roomId, waitingForHost }`
@@ -414,6 +600,10 @@ Server -> Client:
 - `hand-raised` `{ roomId, socketId, userId, userData }`
 - `hand-lowered` `{ roomId, socketId }`
 - `host-changed` `{ hostSocketId, hostUserId }`
+- `visible-participants-updated` `Participant[]`
+- `recording-session-updated` `RecordingSession | null`
+- `recorder-joined` `{ roomId, sessionId, socketId }`
+- `recorder-join-denied` `{ roomId, sessionId }`
 - `meeting-ended` `{ roomId }`
 - `meeting-end-failed` `{ roomId }`
 - `auth-error` `{ message }`
@@ -422,10 +612,11 @@ Server -> Client:
 
 ## Media / Recording Notes
 
-- Host recording UI exists in frontend room page and uses browser `MediaRecorder`.
-- Start/pause/resume/stop are frontend controls.
-- Recording is **not persisted by backend API** currently.
-- Screen share has frontend option to include device audio (`getDisplayMedia({ audio: true })` when enabled).
+- Host recording UI now controls a backend session manager.
+- The browser is no longer the source of truth for recording lifecycle.
+- A hidden recorder worker is expected to join the room and execute the actual capture pipeline.
+- If the host leaves but the meeting remains active, the recorder worker can continue because it is a separate hidden participant.
+- Screen share still has frontend option to include device audio (`getDisplayMedia({ audio: true })` when enabled).
 - Device audio availability depends on browser and capture target (tab/window/system constraints).
 
 ---
@@ -435,4 +626,4 @@ Server -> Client:
 - HTTP routes: `server/routes/*.ts`
 - Socket handlers: `server/index.ts`
 - Calendar slot logic/types: `server/services/calendarService.ts`
-- Frontend media controls (recording, share-audio option): `app/room/[roomId]/page.tsx`, `hooks/useWebRTC.ts`
+- Frontend media controls (recording session control, share-audio option): `app/room/[roomId]/page.tsx`, `hooks/useWebRTC.ts`

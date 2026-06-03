@@ -6,6 +6,8 @@ interface Participant {
     avatar?: string;
   };
   joinedAt: Date;
+  hidden?: boolean;
+  role?: 'user' | 'recorder';
 }
 
 interface Room {
@@ -34,13 +36,15 @@ export class RoomManager {
     return this.rooms.get(roomId)!;
   }
 
-  addUserToRoom(roomId: string, userId: string, socketId: string, userData: any) {
+  addUserToRoom(roomId: string, userId: string, socketId: string, userData: any, options?: { hidden?: boolean; role?: 'user' | 'recorder' }) {
     const room = this.ensureRoom(roomId);
     room.participants.set(socketId, {
       userId,
       socketId,
       userData,
       joinedAt: new Date(),
+      hidden: options?.hidden ?? false,
+      role: options?.role ?? 'user',
     });
   }
 
@@ -123,6 +127,20 @@ export class RoomManager {
     return room ? Array.from(room.participants.values()) : [];
   }
 
+  getVisibleParticipants(roomId: string): Participant[] {
+    return this.getRoomParticipants(roomId).filter((participant) => !participant.hidden);
+  }
+
+  addHiddenRecorder(roomId: string, socketId: string, serviceInstanceId: string) {
+    this.addUserToRoom(
+      roomId,
+      `recorder:${serviceInstanceId}`,
+      socketId,
+      { name: 'Hidden Recorder', serviceInstanceId },
+      { hidden: true, role: 'recorder' }
+    );
+  }
+
   getRoomSize(roomId: string): number {
     const room = this.rooms.get(roomId);
     return room ? room.participants.size : 0;
@@ -151,7 +169,7 @@ export class RoomManager {
     const changes: Array<{ roomId: string; newHost?: Participant }> = [];
     for (const room of this.rooms.values()) {
       if (room.hostSocketId === socketId) {
-        const next = room.participants.values().next().value as Participant | undefined;
+        const next = Array.from(room.participants.values()).find((participant) => !participant.hidden);
         if (next) {
           room.hostSocketId = next.socketId;
           room.hostUserId = next.userId;
