@@ -23,6 +23,7 @@ interface WebRTCConfig {
     username?: string;
     credential?: string;
   }>;
+  lowDataMode?: boolean;
 }
 
 type BackgroundMode = 'none' | 'blur' | 'image';
@@ -89,6 +90,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [meetingEnded, setMeetingEnded] = useState(false);
+  const [isLowDataMode, setIsLowDataMode] = useState(Boolean(config.lowDataMode));
 
   const applyVideoTrack = useCallback((nextTrack: MediaStreamTrack | null) => {
     if (!localStreamRef.current) return;
@@ -444,9 +446,12 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         setError(null);
       });
 
-      socketRef.current.on('join-denied', () => {
+      socketRef.current.on('join-denied', (data?: any) => {
         approvedRef.current = false;
         setJoinStatus('denied');
+        if (data?.message) {
+          setError(data.message);
+        }
       });
 
       socketRef.current.on('join-request', (req: JoinRequest) => {
@@ -918,7 +923,11 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
+        video: isLowDataMode ? {
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+          frameRate: { ideal: 15 }
+        } : {
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -952,7 +961,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       setError(errorMessage);
       console.error(errorMessage);
     }
-  }, [applyVideoTrack, isCameraOn, isScreenSharing, roomId, startBackgroundEffect]);
+  }, [applyVideoTrack, isCameraOn, isScreenSharing, isLowDataMode, roomId, startBackgroundEffect]);
 
   // Toggle microphone
   const toggleMicrophone = useCallback(async () => {
@@ -1147,8 +1156,10 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     isHandRaised,
     backgroundMode,
     backgroundImage,
+    isLowDataMode,
     setBackgroundMode,
     setBackgroundImage,
+    setIsLowDataMode,
     requestJoin,
     approveJoin,
     denyJoin,

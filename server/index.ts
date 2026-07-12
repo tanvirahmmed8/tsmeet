@@ -215,6 +215,13 @@ io.on('connection', (socket) => {
       const joiningUserId = String(userId);
       const existingHost = roomManager.getHost(roomId);
 
+      const MAX_PARTICIPANTS = 10;
+      const currentParticipants = roomManager.getRoomParticipants(roomId).filter(p => !p.hidden).length;
+      if (currentParticipants >= MAX_PARTICIPANTS && creatorId !== joiningUserId) {
+        socket.emit('join-denied', { roomId, message: 'Room is full (max 10 participants)' });
+        return;
+      }
+
       if (!existingHost?.socketId && isHost && creatorId === joiningUserId && effectiveAuthenticatedUserId === joiningUserId) {
         roomManager.setHost(roomId, socket.id, joiningUserId);
       }

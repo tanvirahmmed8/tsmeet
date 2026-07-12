@@ -66,6 +66,7 @@ import {
   Pause,
   Play,
   Square,
+  Wifi,
 } from 'lucide-react';
 
 interface Participant {
@@ -184,8 +185,10 @@ export default function RoomPage() {
     isHandRaised,
     backgroundMode,
     backgroundImage,
+    isLowDataMode,
     setBackgroundMode,
     setBackgroundImage,
+    setIsLowDataMode,
     requestJoin,
     approveJoin,
     denyJoin,
@@ -1591,6 +1594,23 @@ export default function RoomPage() {
             >
               <Sparkles className="w-4 h-4 mr-2" />
               Blur background
+            </Button>
+
+            <Button
+              type="button"
+              size="lg"
+              variant={isLowDataMode ? 'default' : 'outline'}
+              className={isLowDataMode ? 'rounded-full bg-amber-500 hover:bg-amber-600 text-white' : 'rounded-full border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'}
+              onClick={async () => {
+                setIsLowDataMode(!isLowDataMode);
+                if (isCameraOn) {
+                  await toggleCamera();
+                }
+              }}
+              title="Lower video resolution to save bandwidth"
+            >
+              <Wifi className="w-4 h-4 mr-2" />
+              Low Data Mode
             </Button>
 
             <DropdownMenu>

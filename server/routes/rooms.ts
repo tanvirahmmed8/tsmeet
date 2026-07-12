@@ -67,7 +67,7 @@ router.post('/:roomId/end', async (req: Request, res: Response) => {
     }
 
     const room = result.rows[0];
-    if (room.creator_id !== userId) {
+    if (String(room.creator_id) !== String(userId)) {
       return res.status(403).json({ error: 'Only room creator can end the meeting' });
     }
 
