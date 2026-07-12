@@ -9,6 +9,9 @@ interface PeerConnection {
   peer: SimplePeer.Instance;
   stream?: MediaStream;
   hidden?: boolean;
+  connected?: boolean;
+  userData?: { name?: string };
+  userId?: string;
 }
 
 interface WebRTCConfig {
@@ -274,7 +277,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
 
   // Create peer connection
   const createPeerConnection = useCallback(
-    (peerId: string, initiator: boolean, stream: MediaStream, options?: { hidden?: boolean }) => {
+    (peerId: string, initiator: boolean, stream: MediaStream, options?: { hidden?: boolean; userData?: any; userId?: string }) => {
       const iceServers = config.iceServers || [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
@@ -321,6 +324,14 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         }
       });
 
+      peer.on('connect', () => {
+        const connection = peersRef.current.get(peerId);
+        if (connection) {
+          connection.connected = true;
+          setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
+        }
+      });
+
       peer.on('error', (err: any) => {
         console.error(`Peer error for ${peerId}:`, err);
         removePeerConnection(peerId);
@@ -330,7 +341,13 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         removePeerConnection(peerId);
       });
 
-      const connection: PeerConnection = { peerId, peer, hidden: options?.hidden ?? false };
+      const connection: PeerConnection = { 
+        peerId, 
+        peer, 
+        hidden: options?.hidden ?? false,
+        userData: options?.userData,
+        userId: options?.userId
+      };
       peersRef.current.set(peerId, connection);
       setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
 
@@ -484,8 +501,16 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       socketRef.current.on('room-participants', (participants: any[]) => {
         if (!approvedRef.current) return;
         participants.forEach((participant) => {
-          if (!peersRef.current.has(participant.socketId)) {
-            createPeerConnection(participant.socketId, true, localStreamRef.current || stream);
+          const existing = peersRef.current.get(participant.socketId);
+          if (existing) {
+            existing.userData = participant.userData;
+            existing.userId = participant.userId;
+            setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
+          } else {
+            createPeerConnection(participant.socketId, true, localStreamRef.current || stream, {
+              userData: participant.userData,
+              userId: participant.userId
+            });
           }
         });
       });
@@ -493,7 +518,10 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       socketRef.current.on('user-joined', (data: any) => {
         if (!approvedRef.current) return;
         if (!peersRef.current.has(data.socketId)) {
-          createPeerConnection(data.socketId, false, localStreamRef.current || stream);
+          createPeerConnection(data.socketId, false, localStreamRef.current || stream, {
+            userData: data.userData,
+            userId: data.userId
+          });
         }
       });
 

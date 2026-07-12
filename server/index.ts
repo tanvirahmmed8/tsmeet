@@ -73,6 +73,10 @@ app.get('/recorder/:sessionId', (_req, res) => {
 const roomManager = new RoomManager();
 const recordingSessionManager = new RecordingSessionManager();
 
+// Recording Routes
+app.use('/api/recordings', authenticateToken, createUserRecordingRoutes(io, recordingSessionManager));
+app.use('/api/recording-service', createRecorderServiceRoutes(io, recordingSessionManager));
+
 async function persistRecordingSessionState(sessionId: string) {
   const session = recordingSessionManager.getSession(sessionId);
   if (!session) return;

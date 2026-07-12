@@ -13,7 +13,7 @@ async function main() {
   const { chromium } = require('playwright');
   const browser = await chromium.launch({
     headless: true,
-    args: ['--use-fake-ui-for-media-stream', '--no-sandbox', '--disable-dev-shm-usage'],
+    args: ['--use-fake-ui-for-media-stream', '--no-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'],
   });
 
   const activeSessions = new Map();

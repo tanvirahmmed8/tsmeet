@@ -1211,7 +1211,7 @@ export default function RoomPage() {
                     stageVideoRef.current = event.currentTarget;
                   }}
                 />
-              ) : stageStream ? (
+              ) : stageStream && stageStream.getVideoTracks().length > 0 ? (
                 <video
                   autoPlay
                   playsInline
@@ -1222,11 +1222,23 @@ export default function RoomPage() {
                     if (el.srcObject !== stageStream) el.srcObject = stageStream;
                   }}
                 />
+              ) : pinnedPeer?.connected ? (
+                <div className="w-full h-full bg-[#08101b]/82 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-white/10 bg-white/5 mb-4">
+                      <span className="text-4xl font-medium text-white/80">
+                        {pinnedPeer.userData?.name?.charAt(0).toUpperCase() || 'G'}
+                      </span>
+                    </div>
+                    <p className="text-lg font-medium text-white/80">{pinnedPeer.userData?.name || 'Guest'}</p>
+                    <p className="mt-1 text-sm text-white/50">Camera is off</p>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full bg-[#08101b] flex items-center justify-center">
                   <div className="text-center">
                     <Users className="w-12 h-12 text-white/30 mx-auto mb-2" />
-                    <p className="text-white/70">Waiting for stream…</p>
+                    <p className="text-white/70">Connecting…</p>
                   </div>
                 </div>
               )}
@@ -1345,7 +1357,7 @@ export default function RoomPage() {
                     className="relative aspect-video w-56 shrink-0 cursor-pointer overflow-hidden rounded-[22px] border border-white/10 bg-[#08101b]"
                     onClick={() => pinPeer(peerConn.peerId)}
                   >
-                    {stream ? (
+                    {stream && stream.getVideoTracks().length > 0 ? (
                       <video
                         autoPlay
                         playsInline
@@ -1355,14 +1367,22 @@ export default function RoomPage() {
                           if (el.srcObject !== stream) el.srcObject = stream;
                         }}
                       />
+                    ) : peerConn.connected ? (
+                      <div className="w-full h-full bg-[#08101b] flex flex-col items-center justify-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 mb-2">
+                          <span className="text-xl font-medium text-white/80">
+                            {peerConn.userData?.name?.charAt(0).toUpperCase() || 'G'}
+                          </span>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full h-full bg-[#08101b] flex items-center justify-center">
                         <p className="text-white/70 text-sm">Connecting…</p>
                       </div>
                     )}
 
-                    <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/45 px-2.5 py-1 text-xs text-white backdrop-blur-md">
-                      Guest {index + 1}
+                    <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/45 px-2.5 py-1 text-xs text-white backdrop-blur-md max-w-[calc(100%-24px)] truncate">
+                      {peerConn.userData?.name || `Guest ${index + 1}`}
                     </div>
 
                     {pinnedId === peerConn.peerId ? (
