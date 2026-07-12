@@ -215,10 +215,10 @@ io.on('connection', (socket) => {
       const joiningUserId = String(userId);
       const existingHost = roomManager.getHost(roomId);
 
-      const MAX_PARTICIPANTS = 10;
+      const MAX_PARTICIPANTS = 100;
       const currentParticipants = roomManager.getRoomParticipants(roomId).filter(p => !p.hidden).length;
       if (currentParticipants >= MAX_PARTICIPANTS && creatorId !== joiningUserId) {
-        socket.emit('join-denied', { roomId, message: 'Room is full (max 10 participants)' });
+        socket.emit('join-denied', { roomId, message: `Room is full (max ${MAX_PARTICIPANTS} participants)` });
         return;
       }
 
