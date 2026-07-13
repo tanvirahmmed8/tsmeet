@@ -33,3 +33,7 @@ server/node_modules/
 server/.env
 server/.env.*
 !server/.env.example
+
+# Lockfiles
+package-lock.json
+server/package-lock.json

@@ -102,9 +102,9 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/20 to-primary/0 blur-3xl -z-10 rounded-3xl opacity-20"></div>
             <Card className="border-primary/10 bg-card/50 backdrop-blur-sm p-8 sm:p-12">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6">
-                <div className="text-center">
+                <div className="text-center group hover:-translate-y-1 transition-all duration-300 p-4 rounded-xl hover:bg-primary/5">
                   <div className="mb-4 flex justify-center">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                       <Users className="w-6 h-6 text-primary" />
                     </div>
                   </div>
@@ -114,9 +114,9 @@ export default function Home() {
                   </p>
                 </div>
 
-                <div className="text-center">
+                <div className="text-center group hover:-translate-y-1 transition-all duration-300 p-4 rounded-xl hover:bg-primary/5">
                   <div className="mb-4 flex justify-center">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                       <Share2 className="w-6 h-6 text-primary" />
                     </div>
                   </div>
@@ -126,9 +126,9 @@ export default function Home() {
                   </p>
                 </div>
 
-                <div className="text-center">
+                <div className="text-center group hover:-translate-y-1 transition-all duration-300 p-4 rounded-xl hover:bg-primary/5">
                   <div className="mb-4 flex justify-center">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                       <MessageSquare className="w-6 h-6 text-primary" />
                     </div>
                   </div>
@@ -308,9 +308,12 @@ export default function Home() {
             </div>
           </div>
 
-          <div id="contact" className="border-t border-border pt-8">
+          <div id="contact" className="border-t border-border pt-8 flex flex-col items-center gap-2">
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
               © 2026 TSMeet. Private collaboration software for modern teams.
+            </p>
+            <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
+              Developed by <a href="https://tanvirsoft.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Tanvir Ahmmed</a>
             </p>
           </div>
         </div>

@@ -310,7 +310,7 @@ export default function DashboardPage() {
                   {rooms.map((room) => (
                     <Card
                       key={room.id}
-                      className="rounded-[24px] border-border/70 bg-background/80 p-5 shadow-none transition-colors hover:border-primary/22"
+                      className="rounded-[24px] border-border/70 bg-background/80 p-5 shadow-none hover:border-primary/22 hover:-translate-y-1 hover:shadow-md transition-all duration-300"
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="min-w-0 flex-1">
@@ -466,6 +466,16 @@ export default function DashboardPage() {
               </Card>
             </div>
           </section>
+
+          {/* Footer */}
+          <footer className="mt-16 pb-8 border-t border-border/10 pt-8 flex flex-col items-center gap-2">
+            <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
+              © 2026 TSMeet. Private collaboration software for modern teams.
+            </p>
+            <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
+              Developed by <a href="https://tanvirsoft.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Tanvir Ahmmed</a>
+            </p>
+          </footer>
         </div>
       </main>
     </UserSidebar>

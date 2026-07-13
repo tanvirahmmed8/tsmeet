@@ -1558,7 +1558,8 @@ export default function RoomPage() {
       ) : null}
 
       {/* Control Bar */}
-      <div className="border-t border-white/10 bg-slate-950/72 px-4 py-4 backdrop-blur-xl">
+      <div className="relative border-t border-white/10 bg-slate-950/80 px-4 py-4 backdrop-blur-2xl shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
         {videoSettingsOpen ? (
           <div className="mx-auto mb-3 flex w-full max-w-5xl flex-wrap items-center gap-3 rounded-[28px] border border-white/10 bg-white/5 px-3 py-3 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.7)]">
             <div className="min-w-[240px] flex-1">
