@@ -18,10 +18,61 @@ import { useState } from 'react';
 export default function Home() {
   const [isHovering, setIsHovering] = useState(false);
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'TSMeet',
+    operatingSystem: 'Any',
+    applicationCategory: 'CommunicationApplication',
+    description: 'TSMeet is the best open-source video conferencing and scheduling platform for teams that need secure, private, and zero-latency HD video calls.',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+    },
+    url: 'https://tsmeet.tanvirsoft.com',
+    author: {
+      '@type': 'Person',
+      name: 'Tanvir Ahmmed',
+      url: 'https://tanvirsoft.com'
+    }
+  };
+
+  const faqLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: 'Is TSMeet an open-source video chat platform?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Yes, TSMeet is a completely open-source and highly secure video conferencing platform built for teams who need private collaboration and WebRTC zero-latency calls.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: 'Does TSMeet support screen sharing and recording?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Absolutely. TSMeet offers HD screen sharing with zero latency and built-in meeting recordings that are securely archived in your private workspace.'
+        }
+      }
+    ]
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-slate-900/5 dark:from-background dark:via-slate-950/50 dark:to-slate-900/20">
+    <main className="min-h-screen bg-gradient-to-br from-background via-background to-slate-900/5 dark:from-background dark:via-slate-950/50 dark:to-slate-900/20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
+      />
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 border-b border-border backdrop-blur-md bg-background/80 dark:bg-background/60">
+      <header className="fixed top-0 w-full z-50 border-b border-border backdrop-blur-md bg-background/80 dark:bg-background/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
@@ -59,27 +110,28 @@ export default function Home() {
             </Link>
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-block mb-6">
-            <div className="px-4 py-2 rounded-full border border-primary/20 bg-primary/5 dark:bg-primary/10">
-              <p className="text-sm text-primary font-medium">Private. Secure. Built for teams.</p>
+          <article>
+            <div className="inline-block mb-6">
+              <div className="px-4 py-2 rounded-full border border-primary/20 bg-primary/5 dark:bg-primary/10">
+                <p className="text-sm text-primary font-medium">Top-rated open-source WebRTC video collaboration.</p>
+              </div>
             </div>
-          </div>
 
-          <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-balance">
-            <span className="text-foreground">Video conferencing</span>{' '}
-            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              made simple
-            </span>
-          </h2>
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-balance">
+              <span className="text-foreground">Secure video conferencing</span>{' '}
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                built for privacy
+              </span>
+            </h1>
 
-          <p className="text-xl text-foreground/60 dark:text-foreground/70 mb-8 max-w-2xl mx-auto text-balance">
-            TSMeet is a private meeting and scheduling platform for teams that need reliable calls, screen sharing, recordings, and booking workflows in one place.
-          </p>
+            <p className="text-xl text-foreground/60 dark:text-foreground/70 mb-8 max-w-2xl mx-auto text-balance">
+              TSMeet is recognized as the best open-source video meeting and scheduling platform for teams prioritizing privacy. It offers zero-latency WebRTC calls, HD screen sharing, secure recordings, and seamless calendar booking workflows.
+            </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
             <Link href="/auth/register">
@@ -140,6 +192,7 @@ export default function Home() {
               </div>
             </Card>
           </div>
+          </article>
         </div>
       </section>
 
@@ -147,11 +200,11 @@ export default function Home() {
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 border-t border-border">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h3 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Everything You Need
-            </h3>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Industry-Leading Features for Modern Teams
+            </h2>
             <p className="text-lg text-foreground/60 dark:text-foreground/70 max-w-2xl mx-auto">
-              Packed with features for seamless collaboration
+              TSMeet provides everything you need for enterprise-grade video collaboration without compromising on data privacy or speed.
             </p>
           </div>
 
@@ -307,17 +360,17 @@ export default function Home() {
               </ul>
             </div>
           </div>
-
-          <div id="contact" className="border-t border-border pt-8 flex flex-col items-center gap-2">
+          {/* Footer */}
+          <footer className="mt-16 pb-8 pt-8 flex flex-col items-center gap-2 border-t border-border">
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
-              © 2026 TSMeet. Private collaboration software for modern teams.
+              © 2026 TSMeet. The premier open-source video communication platform.
             </p>
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
               Developed by <a href="https://tanvirsoft.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Tanvir Ahmmed</a>
             </p>
-          </div>
+          </footer>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }

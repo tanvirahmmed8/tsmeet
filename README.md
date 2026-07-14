@@ -34,7 +34,7 @@ Build with Next.js, Node.js, MySQL, Socket.IO, and WebRTC. Supports meetings, ca
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/yourusername/tsmeet.git
+git clone https://github.com/tanvirahmmed8/tsmeet.git
 cd tsmeet
 
 # 2. Install dependencies
