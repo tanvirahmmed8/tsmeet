@@ -1,0 +1,38 @@
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:3001:3001"
+
+  backend:
+    ports: !override
+      - "127.0.0.1:3002:3002"
+
+  livekit:
+    ports: !override
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:6789:6789"
+      - "7881:7881/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "50000-60000:50000-60000/udp"
+
+  minio:
+    ports: !override
+      - "127.0.0.1:9100:9000"
+
+  mysql:
+    ports: !override []
+
+  redis:
+    ports: !override []
+
+  egress:
+    ports: !override []
+
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9091:9090"
+
+  grafana:
+    ports: !override
+      - "127.0.0.1:3003:3000"

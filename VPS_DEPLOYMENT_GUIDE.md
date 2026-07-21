@@ -9,6 +9,28 @@ Replace both example names and `VPS_PUBLIC_IP` everywhere before deployment. MyS
 
 > This design is for one VPS. It is simple, fully self-hosted, and has no SaaS dependency. It is not high availability: if the VPS fails, the meeting service stops.
 
+## Automated deployment path
+
+The repository includes repeatable deployment scripts. On a fresh Ubuntu VPS, replace the example domains and repository URL, then run:
+
+```bash
+git clone YOUR_GIT_REPOSITORY_URL /opt/tsmeet
+cd /opt/tsmeet
+sudo bash deploy/install-server.sh
+cp .env.example .env
+nano .env
+./deploy/configure-app.sh
+./deploy/deploy-production.sh
+sudo FRONTEND_DOMAIN=meet.example.com \
+  API_DOMAIN=api.example.com \
+  CERTBOT_EMAIL=admin@example.com \
+  PROJECT_DIR=/opt/tsmeet \
+  ./deploy/configure-nginx.sh
+sudo API_DOMAIN=api.example.com PROJECT_DIR=/opt/tsmeet ./deploy/enable-livekit-turn.sh
+```
+
+After installation, use `./deploy/dc` for every Compose operation, for example `./deploy/dc ps` and `./deploy/dc logs --tail=100 livekit`. The remaining sections explain and verify every automated step.
+
 ## 1. Production architecture
 
 ```text
@@ -261,9 +283,9 @@ prometheus_port: 6789
 
 Why TURN/TLS uses `5349`, not `443`: Nginx already owns TCP `443` for the two HTTPS domains on this single IP. Port `5349` is the standard direct TURN/TLS port and uses the same `api.example.com` certificate. Some highly restrictive networks permit only TCP/TLS on port 443; supporting those networks requires a separate public IP, an L4 multiplexer/load balancer, or a third TURN endpoint. Do not map container `5349` to host `443` while Nginx is using it.
 
-## 8. Add the VPS-only Docker override
+## 8. Verify the committed VPS-only Docker override
 
-The repository base Compose file intentionally publishes development ports. Compose normally appends port mappings from layered files, so `ports: []` does not remove the base ports. Create `/opt/tsmeet/docker-compose.vps.yml` with the following content:
+The repository base Compose file intentionally publishes development ports. Compose normally appends port mappings from layered files, so `ports: []` does not remove the base ports. The committed `/opt/tsmeet/docker-compose.vps.yml` must contain:
 
 ```yaml
 services:

@@ -13,7 +13,7 @@ rtc:
 
 redis:
   address: redis:6379
-  password: replace-from-your-deployment-secret-store
+  password: __REDIS_PASSWORD__
 
 # Supply production keys with LIVEKIT_KEYS="api-key: api-secret" or render
 # this template from your deployment secret store.
@@ -25,12 +25,8 @@ room:
   max_participants: 50
 
 turn:
-  enabled: true
-  udp_port: 3478
-  tls_port: 5349
-  domain: turn.example.com
-  cert_file: /etc/letsencrypt/live/turn.example.com/fullchain.pem
-  key_file: /etc/letsencrypt/live/turn.example.com/privkey.pem
+  # deploy/enable-livekit-turn.sh replaces this block after Certbot succeeds.
+  enabled: false
 
 logging:
   level: info

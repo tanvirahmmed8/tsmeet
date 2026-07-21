@@ -34,6 +34,9 @@ server/.env
 server/.env.*
 !server/.env.example
 
-# Lockfiles
+# The root uses pnpm; the backend Docker image uses npm ci.
 package-lock.json
-server/package-lock.json
+!server/package-lock.json
+
+# Generated production configuration (contains rendered secrets)
+infrastructure/livekit/livekit.production.yaml

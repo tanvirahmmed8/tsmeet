@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-/opt/tsmeet}"
+
+exec docker compose \
+  --env-file "${PROJECT_DIR}/.env" \
+  -f "${PROJECT_DIR}/docker-compose.yml" \
+  -f "${PROJECT_DIR}/docker-compose.production.yml" \
+  -f "${PROJECT_DIR}/docker-compose.vps.yml" \
+  "$@"
