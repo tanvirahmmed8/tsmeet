@@ -2,7 +2,7 @@
 
 **Video meetings, scheduling, API access, and server-managed recording**
 
-Build with Next.js, Node.js, MySQL, Socket.IO, and WebRTC. Supports meetings, calendars, booking flows, API docs, and recorder-worker based archival recording.
+Build with Next.js, Node.js, MySQL, Redis, Socket.IO, and a self-hosted LiveKit SFU. Supports meetings, calendars, booking flows, API docs, LiveKit Egress composite recording, and private MinIO storage.
 
 ![Node](https://img.shields.io/badge/Node-18%2B-green.svg)
 ![React](https://img.shields.io/badge/React-19.2-blue.svg)
@@ -12,7 +12,7 @@ Build with Next.js, Node.js, MySQL, Socket.IO, and WebRTC. Supports meetings, ca
 
 ## 🎯 Key Features
 
-- ✅ **1-to-1 & Group Video Calls** - Unlimited participants
+- ✅ **1-to-1 & Small Group Video Calls** - WebRTC mesh rooms capped by `MAX_MESH_PARTICIPANTS` (default: 8)
 - ✅ **HD Audio & Video** - Up to 1080p with adaptive bitrate
 - ✅ **Screen Sharing** - Share your screen with zero latency
 - ✅ **Text Chat** - Real-time messaging during meetings
@@ -151,7 +151,7 @@ Coturn STUN/TURN Server
 | Connection Time | < 2 seconds | WebRTC peer setup |
 | Video Latency | < 100ms | End-to-end delay |
 | Chat Latency | < 50ms | Message delivery |
-| Max Participants | 50-100 per meeting | Per signaling server |
+| Max Participants | 8 by default | WebRTC mesh; use an SFU for larger rooms |
 | Bandwidth | 2.5-4 Mbps | For HD video per user |
 | CPU Usage | < 30% | Per signaling server |
 
@@ -278,7 +278,7 @@ Quick reference:
 - Add routes in `server/routes/*` and mount in `server/index.ts`.
 - Database bootstraps automatically from `server/db.ts` on backend start.
 - Frontend calls backend via Next API proxy routes in `app/api/*`.
-- WebRTC/session behavior is centered in `hooks/useWebRTC.ts` and `app/room/[roomId]/page.tsx`.
+- LiveKit media/session behavior is centered in `hooks/useLiveKitRoom.ts` and `app/room/[roomId]/page.tsx`; Socket.IO remains responsible for application events and moderation.
 - Main APIs: auth, rooms, calendars, bookings, public calendars.
 
 ### For System Administrators
@@ -362,7 +362,7 @@ We welcome contributions! Whether it's features, bug fixes, documentation, or tr
 - [x] Room management
 
 ### Phase 2 🚧 In Progress
-- [ ] Complete WebRTC peer connections
+- [x] Complete WebRTC peer connections for small mesh rooms
 - [ ] Audio/video codec selection
 - [ ] Bandwidth adaptation
 - [ ] Recording support
@@ -447,7 +447,7 @@ Built with inspiration from:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tsmeet.git
+git clone https://github.com/tanvirahmmed8/tsmeet.git
 cd tsmeet
 
 # Follow the Quick Start guide above

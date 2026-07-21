@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew TSMeet TLS certificates and reload LiveKit
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=TSMEET_ROOT=/opt/tsmeet
+ExecStart=/usr/bin/certbot renew --quiet --deploy-hook /opt/tsmeet/infrastructure/certbot/reload-livekit.sh

@@ -1,0 +1,39 @@
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: recording failures alert immediately
+    interval: 1m
+    input_series:
+      - series: 'tsmeet_recording_failures_total{instance="backend:3002",job="backend"}'
+        values: '0 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RecordingFailure
+        exp_alerts:
+          - exp_labels:
+              instance: backend:3002
+              job: backend
+              severity: critical
+            exp_annotations:
+              summary: A TSMeet recording failed
+
+  - name: disk warning fires below fifteen percent free
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{fstype="ext4",instance="storage-probe"}'
+        values: '140 140 140 140 140 140 140 140 140 140 140 140'
+      - series: 'node_filesystem_size_bytes{fstype="ext4",instance="storage-probe"}'
+        values: '1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000 1000'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: HostDiskNearlyFull
+        exp_alerts:
+          - exp_labels:
+              fstype: ext4
+              instance: storage-probe
+              severity: warning
+            exp_annotations:
+              summary: Host disk has less than 15% free space

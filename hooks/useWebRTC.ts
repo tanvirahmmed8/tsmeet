@@ -8,6 +8,7 @@ interface PeerConnection {
   peerId: string;
   peer: SimplePeer.Instance;
   stream?: MediaStream;
+  screenStream?: MediaStream;
   hidden?: boolean;
   connected?: boolean;
   userData?: { name?: string };
@@ -16,13 +17,9 @@ interface PeerConnection {
 
 interface WebRTCConfig {
   signalingServer: string;
+  enabled?: boolean;
   userName?: string;
-  iceServers?: Array<{ urls: string | string[] }>;
-  turnServers?: Array<{
-    urls: string | string[];
-    username?: string;
-    credential?: string;
-  }>;
+  iceServers?: RTCIceServer[];
   lowDataMode?: boolean;
 }
 
@@ -72,6 +69,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const selfSocketIdRef = useRef<string | null>(null);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const iceServersRef = useRef<RTCIceServer[]>(config.iceServers || []);
 
   const [peers, setPeers] = useState<PeerConnection[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -91,6 +89,9 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [meetingEnded, setMeetingEnded] = useState(false);
   const [isLowDataMode, setIsLowDataMode] = useState(Boolean(config.lowDataMode));
+  const [networkQuality] = useState<'Excellent' | 'Good' | 'Poor' | 'Unknown'>('Unknown');
+  const [coHosts, setCoHosts] = useState<Set<string>>(new Set());
+  const [isMeetingLocked, setIsMeetingLockedState] = useState(false);
 
   const applyVideoTrack = useCallback((nextTrack: MediaStreamTrack | null) => {
     if (!localStreamRef.current) return;
@@ -265,32 +266,54 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   }, [roomId]);
 
   const initializeLocalStream = useCallback(async () => {
-    const rawStream = new MediaStream();
-    const localStream = new MediaStream();
-    rawStreamRef.current = rawStream;
-    localStreamRef.current = localStream;
-    cameraVideoTrackRef.current = null;
-    currentVideoTrackRef.current = null;
-    micAudioTrackRef.current = null;
-    currentAudioTrackRef.current = null;
-    setLocalStream(new MediaStream(localStream.getTracks()));
-    return localStream;
+    try {
+      const rawStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: config.lowDataMode
+          ? { width: { ideal: 320 }, height: { ideal: 180 }, frameRate: { ideal: 15, max: 15 } }
+          : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      });
+      const localStream = new MediaStream(rawStream.getTracks());
+      const cameraTrack = rawStream.getVideoTracks()[0] || null;
+      const microphoneTrack = rawStream.getAudioTracks()[0] || null;
+      rawStreamRef.current = rawStream;
+      localStreamRef.current = localStream;
+      cameraVideoTrackRef.current = cameraTrack;
+      currentVideoTrackRef.current = cameraTrack;
+      micAudioTrackRef.current = microphoneTrack;
+      currentAudioTrackRef.current = microphoneTrack;
+      setIsCameraOn(Boolean(cameraTrack));
+      setIsMicOn(Boolean(microphoneTrack));
+      setLocalStream(new MediaStream(localStream.getTracks()));
+      setError(null);
+      return localStream;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Camera and microphone access failed');
+      return null;
+    }
+  }, [config.lowDataMode]);
+
+  // Remove peer connection
+  const removePeerConnection = useCallback((peerId: string) => {
+    const connection = peersRef.current.get(peerId);
+    if (connection) {
+      connection.peer.destroy();
+      peersRef.current.delete(peerId);
+      setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
+    }
   }, []);
 
   // Create peer connection
   const createPeerConnection = useCallback(
     (peerId: string, initiator: boolean, stream: MediaStream, options?: { hidden?: boolean; userData?: any; userId?: string }) => {
-      const iceServers = config.iceServers || [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ];
+      const iceServers = iceServersRef.current;
 
       const peer = new SimplePeer({
         initiator,
         trickle: true,
         stream,
         config: {
-          iceServers: [...iceServers, ...(config.turnServers || [])],
+          iceServers,
         },
       });
 
@@ -355,18 +378,8 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
 
       return peer;
     },
-    [roomId]
+    [removePeerConnection, roomId]
   );
-
-  // Remove peer connection
-  const removePeerConnection = useCallback((peerId: string) => {
-    const connection = peersRef.current.get(peerId);
-    if (connection) {
-      connection.peer.destroy();
-      peersRef.current.delete(peerId);
-      setPeers(Array.from(peersRef.current.values()).filter((entry) => !entry.hidden));
-    }
-  }, []);
 
   const cleanupRoom = useCallback((notifyServer: boolean) => {
     if (socketRef.current) {
@@ -402,11 +415,15 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
 
   // Initialize socket connection
   useEffect(() => {
+    if (config.enabled === false) return;
+    const peerConnections = peersRef.current;
     const initializeSocket = async () => {
       const stream = await initializeLocalStream();
       if (!stream) return;
 
       socketRef.current = io(config.signalingServer, {
+        withCredentials: true,
+        transports: ['websocket'],
         auth: {
           token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
         },
@@ -440,6 +457,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       });
 
       socketRef.current.on('join-approved', (data: any) => {
+        if (Array.isArray(data?.iceServers)) iceServersRef.current = data.iceServers;
         approvedRef.current = true;
         setJoinStatus('approved');
         setIsHost(Boolean(data?.isHost));
@@ -486,6 +504,30 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       socketRef.current.on('host-changed', (data: any) => {
         const hostSocketId = data?.hostSocketId || null;
         setIsHost(Boolean(hostSocketId) && hostSocketId === selfSocketIdRef.current);
+      });
+
+      socketRef.current.on('cohost-promoted', (data: { userId?: string }) => {
+        if (!data?.userId) return;
+        setCoHosts((current) => new Set(current).add(String(data.userId)));
+      });
+
+      socketRef.current.on('cohost-demoted', (data: { userId?: string }) => {
+        if (!data?.userId) return;
+        setCoHosts((current) => {
+          const next = new Set(current);
+          next.delete(String(data.userId));
+          return next;
+        });
+      });
+
+      socketRef.current.on('meeting-lock-changed', (data: { locked?: boolean }) => {
+        setIsMeetingLockedState(Boolean(data?.locked));
+      });
+
+      socketRef.current.on('participant-removed', () => {
+        setJoinStatus('denied');
+        setError('You were removed from the meeting.');
+        cleanupRoom(false);
       });
 
       socketRef.current.on('meeting-ended', () => {
@@ -622,10 +664,10 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     initializeSocket();
 
     return () => {
-      peersRef.current.forEach((connection) => {
+      peerConnections.forEach((connection) => {
         connection.peer.destroy();
       });
-      peersRef.current.clear();
+      peerConnections.clear();
 
       if (effectRafRef.current) {
         cancelAnimationFrame(effectRafRef.current);
@@ -645,7 +687,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         socketRef.current.disconnect();
       }
     };
-  }, [roomId, userId, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack]);
+  }, [roomId, userId, config.enabled, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack, playRaiseHandSound]);
 
   const ensureSegmentation = useCallback(async () => {
     if (segmentationRef.current) return segmentationRef.current;
@@ -1114,6 +1156,26 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     socketRef.current.emit('transfer-host', { roomId, targetSocketId });
   }, [roomId]);
 
+  const promoteToCoHost = useCallback((targetSocketId: string) => {
+    socketRef.current?.emit('promote-cohost', { roomId, targetSocketId });
+  }, [roomId]);
+
+  const demoteFromCoHost = useCallback((targetSocketId: string) => {
+    socketRef.current?.emit('demote-cohost', { roomId, targetSocketId });
+  }, [roomId]);
+
+  const removeParticipant = useCallback((targetSocketId: string) => {
+    socketRef.current?.emit('remove-participant', { roomId, targetSocketId });
+  }, [roomId]);
+
+  const setMeetingLocked = useCallback((locked: boolean) => {
+    socketRef.current?.emit('set-meeting-lock', { roomId, locked });
+  }, [roomId]);
+
+  const setParticipantVideoQuality = useCallback((_peerId: string, _quality: 'high' | 'medium' | 'low' | 'off') => {
+    // Mesh peers send one camera stream; per-subscriber simulcast selection is SFU-only.
+  }, []);
+
   const endMeeting = useCallback(() => {
     if (!socketRef.current) return;
     socketRef.current.emit('end-meeting', { roomId });
@@ -1157,6 +1219,14 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     backgroundMode,
     backgroundImage,
     isLowDataMode,
+    networkQuality,
+    coHosts,
+    promoteToCoHost,
+    demoteFromCoHost,
+    setParticipantVideoQuality,
+    removeParticipant,
+    isMeetingLocked,
+    setMeetingLocked,
     setBackgroundMode,
     setBackgroundImage,
     setIsLowDataMode,

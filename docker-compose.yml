@@ -1,0 +1,287 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: videoconference
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-development-only}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-13306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:-development-only}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [data]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [data]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.1
+    command: ["--config", "/etc/livekit/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS:?LIVEKIT_KEYS is required}
+    volumes:
+      - ./infrastructure/livekit/livekit.dev.yaml:/etc/livekit/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "3478:3478/udp"
+      - "50000-50200:50000-50200/udp"
+      - "6789:6789"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks: [edge, data]
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [edge, data]
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tsmeet-recordings}
+      RECORDING_RETENTION_DAYS: ${RECORDING_RETENTION_DAYS:-30}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}" &&
+        mc anonymous set none "local/$${MINIO_BUCKET}" &&
+        mc ilm rule add --expire-days "$${RECORDING_RETENTION_DAYS:-30}" "local/$${MINIO_BUCKET}" || true
+    networks: [data]
+
+  egress:
+    image: livekit/egress:v1.12.0
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      EGRESS_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}
+        api_secret: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
+        ws_url: ws://livekit:7880
+        insecure: true
+        redis:
+          address: redis:6379
+          password: ${REDIS_PASSWORD:-}
+        health_port: 8081
+        prometheus_port: 9090
+        cpu_cost:
+          room_composite_cpu_cost: 3.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+    networks: [edge, data]
+
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      MEETING_BASE_URL: ${MEETING_BASE_URL:-http://localhost:3001}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD:-development-only}
+      DB_NAME: videoconference
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-50}
+      MAX_MESH_PARTICIPANTS: ${MAX_MESH_PARTICIPANTS:-8}
+      MEDIA_PROVIDER: ${MEDIA_PROVIDER:-livekit}
+      MEDIA_PROVIDER_LIVEKIT_ROOMS: ${MEDIA_PROVIDER_LIVEKIT_ROOMS:-}
+      MEDIA_PROVIDER_MESH_ROOMS: ${MEDIA_PROVIDER_MESH_ROOMS:-}
+      STUN_SERVER: ${STUN_SERVER:-}
+      TURN_SERVER: ${TURN_SERVER:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_PASSWORD: ${TURN_PASSWORD:-}
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9100}
+      MINIO_BUCKET: ${MINIO_BUCKET:-tsmeet-recordings}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      EGRESS_LAYOUT_URL: http://frontend:3001/egress-layout
+      RECORDING_STORAGE_QUOTA_BYTES: ${RECORDING_STORAGE_QUOTA_BYTES:-107374182400}
+      RECORDING_RETENTION_DAYS: ${RECORDING_RETENTION_DAYS:-30}
+      RECORDER_SERVICE_TOKEN: ${RECORDER_SERVICE_TOKEN:-}
+    depends_on:
+      - mysql
+      - redis
+      - livekit
+    ports:
+      - "3002:3002"
+    volumes:
+      - recordings:/app/server/storage/recordings
+    networks: [edge, data]
+
+  frontend:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SIGNALING_SERVER: ${NEXT_PUBLIC_SIGNALING_SERVER:-http://localhost:3002}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3002}
+      NEXT_PUBLIC_SIGNALING_SERVER: ${NEXT_PUBLIC_SIGNALING_SERVER:-http://localhost:3002}
+      NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+    networks: [edge]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9091:9090"]
+    networks: [edge, data]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/tsmeet.yml:ro
+      - ./infrastructure/observability/grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/tsmeet.yml:ro
+      - ./infrastructure/observability/tsmeet-dashboard.json:/var/lib/grafana/dashboards/tsmeet.json:ro
+    ports: ["127.0.0.1:3003:3000"]
+    networks: [edge]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.3
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./infrastructure/observability/loki.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    networks: [edge]
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.5.3
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./infrastructure/observability/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [edge]
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command: ["--path.rootfs=/host"]
+    volumes: ["/:/host:ro"]
+    networks: [data]
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks: [data]
+    restart: unless-stopped
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.17.2
+    environment:
+      MYSQL_EXPORTER_PASSWORD: ${DB_ROOT_PASSWORD:-development-only}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        printf '[client]\nuser=root\npassword=%s\nhost=mysql\nport=3306\n'
+        "$${MYSQL_EXPORTER_PASSWORD}" > /tmp/.my.cnf &&
+        exec /bin/mysqld_exporter --config.my-cnf=/tmp/.my.cnf
+    networks: [data]
+    depends_on: [mysql]
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.77.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    networks: [data]
+    depends_on: [redis]
+    restart: unless-stopped
+
+networks:
+  edge:
+  data:
+    internal: true
+
+volumes:
+  mysql-data:
+  redis-data:
+  recordings:
+  minio-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:

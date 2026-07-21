@@ -49,7 +49,7 @@ export default function RegisterPage() {
       }
 
       const data = await res.json();
-      localStorage.setItem('token', data.token);
+      localStorage.removeItem('token');
       localStorage.setItem('user', JSON.stringify(data.user));
 
       router.push('/dashboard');

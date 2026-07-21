@@ -7,10 +7,99 @@ import {
   RecordingSessionManager,
   RecordingSession,
 } from '../services/recordingSessionManager';
+import { startRoomRecording, stopRoomRecording } from '../services/egress';
+import {
+  assertStorageQuotaAvailable,
+  createRecordingDownloadUrl,
+  removeRecordingObjects,
+  StorageQuotaExceededError,
+} from '../services/objectStorage';
+import { writeAuditLog } from '../services/audit';
+import { recordingFailures } from '../services/metrics';
+
+async function currentRecordingSegment(sessionId: string) {
+  const result = await pool.query<any>(
+    `SELECT * FROM recording_segments
+     WHERE recording_id = $1 AND status = 'recording'
+     ORDER BY segment_index DESC LIMIT 1`,
+    [sessionId]
+  );
+  return result.rows[0] || null;
+}
+
+async function startRecordingSegment(roomId: string, sessionId: string) {
+  const count = await pool.query<any>(
+    'SELECT COALESCE(MAX(segment_index), -1) + 1 AS next_index FROM recording_segments WHERE recording_id = $1',
+    [sessionId]
+  );
+  const segment = Number(count.rows[0]?.next_index || 0);
+  let started: Awaited<ReturnType<typeof startRoomRecording>> | null = null;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      started = await startRoomRecording(roomId, sessionId, segment);
+      break;
+    } catch (cause) {
+      lastError = cause;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+    }
+  }
+  if (!started) {
+    recordingFailures.inc();
+    throw lastError instanceof Error ? lastError : new Error('Egress failed after retries');
+  }
+  await pool.query(
+    `INSERT INTO recording_segments
+      (recording_id, segment_index, egress_id, object_key, status)
+     VALUES ($1, $2, $3, $4, 'recording')`,
+    [sessionId, segment, started.egressId, started.objectKey]
+  );
+  await pool.query('UPDATE recording_sessions SET egress_id = $2 WHERE id = $1', [sessionId, started.egressId]);
+  await pool.query(
+    `UPDATE recordings SET object_key = COALESCE(object_key, $2), retention_until = DATE_ADD(NOW(), INTERVAL 30 DAY)
+     WHERE id = $1`,
+    [sessionId, started.objectKey]
+  );
+  return started;
+}
+
+async function stopCurrentSegment(sessionId: string) {
+  const segment = await currentRecordingSegment(sessionId);
+  if (!segment) return null;
+  const result = await stopRoomRecording(String(segment.egress_id));
+  const file = result.fileResults[0];
+  // livekit.EgressStatus.EGRESS_COMPLETE = 3. A stopped request can also
+  // return ABORTED/FAILED, which must never be exposed as a completed file.
+  if (result.status !== 3 || result.error || !file) {
+    const reason = result.error || `Egress ended with status ${result.status}`;
+    await pool.query(
+      `UPDATE recording_segments
+       SET status = 'failed', completed_at = NOW(), failure_reason = $2
+       WHERE id = $1`,
+      [segment.id, reason]
+    );
+    recordingFailures.inc();
+    throw new Error(reason);
+  }
+  await pool.query(
+    `UPDATE recording_segments
+     SET status = 'completed', size_bytes = $2, completed_at = NOW(), failure_reason = NULL
+     WHERE id = $1`,
+    [segment.id, Number(file.size)]
+  );
+  return { ...segment, size_bytes: Number(file.size) };
+}
 
 function broadcastRecordingSession(io: Server, session: RecordingSession | null) {
   if (!session) return;
   io.to(session.roomId).emit('recording-session-updated', session);
+}
+
+function toMysqlDateTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid recording timestamp: ${value}`);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 function getRecorderServiceToken() {
@@ -46,7 +135,11 @@ function isRecorderServiceAuthorized(req: Request) {
   return bearerToken === expectedToken || headerToken === expectedToken;
 }
 
-async function getOwnedRoom(req: Request, roomId: string) {
+type OwnedRoomResult =
+  | { error: { status: number; body: { error: string } }; room?: never }
+  | { room: any; error?: never };
+
+async function getOwnedRoom(req: Request, roomId: string): Promise<OwnedRoomResult> {
   const roomResult = await pool.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
   if (roomResult.rows.length === 0) {
     return { error: { status: 404, body: { error: 'Room not found' } } };
@@ -86,10 +179,10 @@ async function persistSessionSnapshot(session: RecordingSession) {
       session.status,
       session.hiddenRecorderSocketId || null,
       session.recorderServiceInstanceId || null,
-      session.startedAt,
-      session.updatedAt,
-      session.completedAt || null,
-      session.lastHeartbeatAt || null,
+      toMysqlDateTime(session.startedAt),
+      toMysqlDateTime(session.updatedAt),
+      toMysqlDateTime(session.completedAt),
+      toMysqlDateTime(session.lastHeartbeatAt),
       session.failureReason || null,
     ]
   );
@@ -113,7 +206,7 @@ async function ensureRecordingArchiveRow(session: RecordingSession) {
       Number(session.creatorId),
       Number(session.startedByUserId),
       session.status,
-      session.startedAt,
+      toMysqlDateTime(session.startedAt),
     ]
   );
 }
@@ -153,7 +246,11 @@ async function updateRecordingArtifact(
   );
 }
 
-async function getOwnedRecording(userId: string, recordingId: string) {
+type OwnedRecordingResult =
+  | { error: { status: number; body: { error: string } }; recording?: never }
+  | { recording: any; error?: never };
+
+async function getOwnedRecording(userId: string, recordingId: string): Promise<OwnedRecordingResult> {
   const result = await pool.query(
     `SELECT r.*
      FROM recordings r
@@ -202,10 +299,9 @@ export function createUserRecordingRoutes(
     try {
       const { roomId } = req.params;
       const ownedRoom = await getOwnedRoom(req, roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
-
       const session = recordingSessionManager.getActiveSessionForRoom(roomId);
       return res.json({ session });
     } catch (error) {
@@ -222,7 +318,7 @@ export function createUserRecordingRoutes(
       }
 
       const ownedRoom = await getOwnedRoom(req, session.roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
 
@@ -237,11 +333,15 @@ export function createUserRecordingRoutes(
     try {
       const { recordingId, kind } = req.params;
       const ownedRecording = await getOwnedRecording(String(req.userId), recordingId);
-      if ('error' in ownedRecording) {
+      if (ownedRecording.error) {
         return res.status(ownedRecording.error.status).json(ownedRecording.error.body);
       }
 
       const row = ownedRecording.recording;
+      if (row.object_key && kind === 'video') {
+        const url = await createRecordingDownloadUrl(String(row.object_key));
+        return res.redirect(302, url);
+      }
       const relativePath = kind === 'video' ? row.video_path : row.audio_path;
       const mimeType = kind === 'video' ? row.mime_type_video : row.mime_type_audio;
       if (!relativePath) {
@@ -266,17 +366,22 @@ export function createUserRecordingRoutes(
     try {
       const { recordingId } = req.params;
       const ownedRecording = await getOwnedRecording(String(req.userId), recordingId);
-      if ('error' in ownedRecording) {
+      if (ownedRecording.error) {
         return res.status(ownedRecording.error.status).json(ownedRecording.error.body);
       }
 
       const row = ownedRecording.recording;
+      const segments = await pool.query<any>(
+        'SELECT object_key FROM recording_segments WHERE recording_id = $1',
+        [recordingId]
+      );
       const filePaths = [row.video_path, row.audio_path]
         .filter(Boolean)
         .map((relativePath: string) => path.join(process.cwd(), relativePath));
 
       await pool.query('DELETE FROM recordings WHERE id = $1', [recordingId]);
       await pool.query('DELETE FROM recording_sessions WHERE id = $1', [recordingId]);
+      await removeRecordingObjects(segments.rows.map((segment) => String(segment.object_key)));
 
       await Promise.all(
         filePaths.map((filePath) =>
@@ -301,11 +406,15 @@ export function createUserRecordingRoutes(
       if (!roomId) {
         return res.status(400).json({ error: 'roomId is required' });
       }
+      if (req.body?.consentConfirmed !== true) {
+        return res.status(400).json({ error: 'Recording consent confirmation is required' });
+      }
 
       const ownedRoom = await getOwnedRoom(req, roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
+      await assertStorageQuotaAvailable(String(ownedRoom.room.creator_id));
 
       const session = recordingSessionManager.createSession(
         roomId,
@@ -314,9 +423,33 @@ export function createUserRecordingRoutes(
       );
       await persistSessionSnapshot(session);
       await ensureRecordingArchiveRow(session);
+      try {
+        const egress = await startRecordingSegment(roomId, session.id);
+        recordingSessionManager.claimSession(session.id, 'livekit-egress', egress.egressId);
+        await persistSessionSnapshot(session);
+      } catch (cause) {
+        const failed = recordingSessionManager.failSession(
+          session.id,
+          cause instanceof Error ? cause.message : 'LiveKit Egress failed to start'
+        );
+        if (failed) await persistSessionSnapshot(failed);
+        throw cause;
+      }
       broadcastRecordingSession(io, session);
+      await writeAuditLog({
+        roomId,
+        actorUserId: String(req.userId),
+        action: 'recording.started',
+        details: { consentConfirmed: true, recordingId: session.id },
+      });
       return res.status(201).json(session);
     } catch (error) {
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(507).json({
+          error: 'Recording storage quota exceeded',
+          code: 'RECORDING_STORAGE_FULL',
+        });
+      }
       console.error('Start recording session error:', error);
       return res.status(500).json({ error: 'Failed to start recording session' });
     }
@@ -330,10 +463,11 @@ export function createUserRecordingRoutes(
       }
 
       const ownedRoom = await getOwnedRoom(req, session.roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
 
+      await stopCurrentSegment(req.params.sessionId);
       const updated = recordingSessionManager.pauseSession(req.params.sessionId);
       if (!updated) {
         return res.status(404).json({ error: 'Recording session not found' });
@@ -356,19 +490,28 @@ export function createUserRecordingRoutes(
       }
 
       const ownedRoom = await getOwnedRoom(req, session.roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
+      await assertStorageQuotaAvailable(String(ownedRoom.room.creator_id));
 
+      const egress = await startRecordingSegment(session.roomId, session.id);
       const updated = recordingSessionManager.resumeSession(req.params.sessionId);
       if (!updated) {
         return res.status(404).json({ error: 'Recording session not found' });
       }
+      recordingSessionManager.claimSession(session.id, 'livekit-egress', egress.egressId);
 
       await persistSessionSnapshot(updated);
       broadcastRecordingSession(io, updated);
       return res.json(updated);
     } catch (error) {
+      if (error instanceof StorageQuotaExceededError) {
+        return res.status(507).json({
+          error: 'Recording storage quota exceeded',
+          code: 'RECORDING_STORAGE_FULL',
+        });
+      }
       console.error('Resume recording session error:', error);
       return res.status(500).json({ error: 'Failed to resume recording session' });
     }
@@ -382,16 +525,23 @@ export function createUserRecordingRoutes(
       }
 
       const ownedRoom = await getOwnedRoom(req, session.roomId);
-      if ('error' in ownedRoom) {
+      if (ownedRoom.error) {
         return res.status(ownedRoom.error.status).json(ownedRoom.error.body);
       }
 
-      const updated = recordingSessionManager.stopSession(req.params.sessionId);
+      await stopCurrentSegment(req.params.sessionId);
+      const updated = recordingSessionManager.completeSession(req.params.sessionId);
       if (!updated) {
         return res.status(404).json({ error: 'Recording session not found' });
       }
 
       await persistSessionSnapshot(updated);
+      await pool.query(
+        `UPDATE recordings
+         SET status = 'ready', completed_at = NOW(), updated_at = NOW()
+         WHERE id = $1`,
+        [updated.id]
+      );
       broadcastRecordingSession(io, updated);
       return res.json(updated);
     } catch (error) {

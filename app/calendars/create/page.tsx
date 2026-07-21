@@ -29,10 +29,9 @@ export default function CreateCalendarPage() {
   const [fields, setFields] = useState<BookingField[]>([defaultField()]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const rawUser = localStorage.getItem('user');
 
-    if (!token || !rawUser) {
+    if (!rawUser) {
       router.push('/auth/login');
       return;
     }

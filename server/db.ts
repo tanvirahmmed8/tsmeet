@@ -25,11 +25,21 @@ const rawPool: Pool = mysql.createPool({
   queueLimit: 0,
 });
 
-function normalizeSql(sql: string) {
-  return sql
+function normalizeQuery(sql: string, params: any[]) {
+  const orderedParams: any[] = [];
+  let hasNumberedParameters = false;
+  const normalizedSql = sql
     .replace(/::jsonb/gi, '')
     .replace(/::json/gi, '')
-    .replace(/\$\d+/g, '?');
+    .replace(/\$(\d+)/g, (_match, index: string) => {
+      hasNumberedParameters = true;
+      orderedParams.push(params[Number(index) - 1]);
+      return '?';
+    });
+  return {
+    sql: normalizedSql,
+    params: hasNumberedParameters ? orderedParams : params,
+  };
 }
 
 function parseReturning(sql: string) {
@@ -67,10 +77,12 @@ function parseReturning(sql: string) {
 async function queryCompat<T = any>(sql: string, params: any[] = []): Promise<QueryResult<T>> {
   const returning = parseReturning(sql);
   const sqlWithoutReturning = sql.replace(/\s+RETURNING\s+.+$/i, '');
-  const mysqlSql = normalizeSql(sqlWithoutReturning);
+  const normalized = normalizeQuery(sqlWithoutReturning, params);
+  const mysqlSql = normalized.sql;
+  const mysqlParams = normalized.params;
 
   if (returning?.type === 'insert') {
-    const [result] = await rawPool.execute<ResultSetHeader>(mysqlSql, params);
+    const [result] = await rawPool.execute<ResultSetHeader>(mysqlSql, mysqlParams);
     const idParam =
       returning.idIndex >= 0 ? params[returning.idIndex] : result.insertId || undefined;
     if (idParam === undefined || idParam === null) {
@@ -88,7 +100,7 @@ async function queryCompat<T = any>(sql: string, params: any[] = []): Promise<Qu
   }
 
   if (returning?.type === 'update') {
-    await rawPool.execute(mysqlSql, params);
+    await rawPool.execute(mysqlSql, mysqlParams);
     const idParam = params[returning.idParamOneBased - 1];
     if (idParam === undefined || idParam === null) {
       return { rows: [], rowCount: 0 };
@@ -104,7 +116,7 @@ async function queryCompat<T = any>(sql: string, params: any[] = []): Promise<Qu
     return { rows: rows as T[], rowCount: (rows as RowDataPacket[]).length };
   }
 
-  const [result] = await rawPool.execute(mysqlSql, params);
+  const [result] = await rawPool.execute(mysqlSql, mysqlParams);
   if (Array.isArray(result)) {
     return { rows: result as T[], rowCount: result.length };
   }
@@ -118,9 +130,45 @@ const pool: CompatPool = {
   end: () => rawPool.end(),
 };
 
+export async function acquireBookingLock(calendarId: string, timeoutSeconds = 5) {
+  const connection = await rawPool.getConnection();
+  const lockName = `tsmeet:booking:${calendarId}`;
+  try {
+    const [rows] = await connection.execute<RowDataPacket[]>('SELECT GET_LOCK(?, ?) AS acquired', [lockName, timeoutSeconds]);
+    if (Number(rows[0]?.acquired) !== 1) {
+      connection.release();
+      return null;
+    }
+  } catch (error) {
+    connection.release();
+    throw error;
+  }
+
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    try {
+      await connection.execute('SELECT RELEASE_LOCK(?)', [lockName]);
+    } finally {
+      connection.release();
+    }
+  };
+}
+
 // Initialize database schema
 export const initializeDatabase = async () => {
   try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(64) PRIMARY KEY,
+        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const applied = await pool.query('SELECT version FROM schema_migrations WHERE version = $1', ['001_initial_schema']);
+    if (applied.rows.length > 0) {
+      console.log('[database] schema is current');
+    }
     const addColumnIfMissing = async (tableName: string, columnName: string, definitionSql: string) => {
       const existing = await pool.query<{ cnt: number }>(
         `SELECT COUNT(*) AS cnt
@@ -176,6 +224,68 @@ export const initializeDatabase = async () => {
         FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+    await addColumnIfMissing('rooms', 'password_hash', 'VARCHAR(255) NULL');
+    await addColumnIfMissing('rooms', 'livekit_started_at', 'DATETIME NULL');
+    await addColumnIfMissing('rooms', 'livekit_finished_at', 'DATETIME NULL');
+    await addColumnIfMissing('rooms', 'is_locked', 'BOOLEAN NOT NULL DEFAULT false');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meeting_roles (
+        room_id CHAR(36) NOT NULL,
+        user_id INT NOT NULL,
+        role ENUM('host', 'co-host', 'guest') NOT NULL DEFAULT 'guest',
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (room_id, user_id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meeting_waiting_participants (
+        room_id CHAR(36) NOT NULL,
+        user_id INT NOT NULL,
+        socket_id VARCHAR(191) NULL,
+        user_data JSON NULL,
+        status ENUM('pending', 'approved', 'denied') NOT NULL DEFAULT 'pending',
+        requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        decided_at DATETIME NULL,
+        PRIMARY KEY (room_id, user_id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS security_audit_logs (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        room_id CHAR(36) NULL,
+        actor_user_id INT NULL,
+        action VARCHAR(64) NOT NULL,
+        target_user_id INT NULL,
+        details JSON NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_security_audit_room_created (room_id, created_at),
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL,
+        FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS livekit_webhook_events (
+        event_id VARCHAR(191) PRIMARY KEY,
+        room_id CHAR(36) NULL,
+        event_type VARCHAR(64) NOT NULL,
+        participant_identity VARCHAR(191) NULL,
+        received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL
+      );
+    `);
+    await createIndexIfMissing(
+      'livekit_webhook_events',
+      'idx_livekit_webhook_events_room_id',
+      'room_id'
+    );
 
     // Calendars table
     await pool.query(`
@@ -306,6 +416,25 @@ export const initializeDatabase = async () => {
     await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_room_id', 'room_id');
     await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_status', 'status');
     await createIndexIfMissing('recording_sessions', 'idx_recording_sessions_started_at', 'started_at');
+    await addColumnIfMissing('recording_sessions', 'egress_id', 'VARCHAR(191) NULL');
+    await addColumnIfMissing('recordings', 'object_key', 'VARCHAR(512) NULL');
+    await addColumnIfMissing('recordings', 'retention_until', 'DATETIME NULL');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS recording_segments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        recording_id CHAR(36) NOT NULL,
+        segment_index INT NOT NULL,
+        egress_id VARCHAR(191) NOT NULL,
+        object_key VARCHAR(512) NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'recording',
+        started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME NULL,
+        failure_reason TEXT NULL,
+        UNIQUE KEY uq_recording_segment (recording_id, segment_index),
+        FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE
+      );
+    `);
+    await addColumnIfMissing('recording_segments', 'size_bytes', 'BIGINT NULL');
 
     // Chat messages table
     await pool.query(`
@@ -356,7 +485,8 @@ export const initializeDatabase = async () => {
       }
     }
 
-    console.log('✅ Database initialized successfully (MySQL)');
+    await pool.query('INSERT IGNORE INTO schema_migrations (version) VALUES ($1)', ['001_initial_schema']);
+    if (applied.rows.length === 0) console.log('[database] migration 001_initial_schema applied');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
     process.exit(1);

@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  - job_name: tsmeet-backend
+    static_configs: [{ targets: ['backend:3002'] }]
+  - job_name: livekit
+    static_configs: [{ targets: ['livekit:6789'] }]
+  - job_name: egress
+    static_configs: [{ targets: ['egress:9090'] }]
+  - job_name: node
+    static_configs: [{ targets: ['node-exporter:9100'] }]
+  - job_name: containers
+    static_configs: [{ targets: ['cadvisor:8080'] }]
+  - job_name: mysql
+    static_configs: [{ targets: ['mysql-exporter:9104'] }]
+  - job_name: redis
+    static_configs: [{ targets: ['redis-exporter:9121'] }]

@@ -75,10 +75,9 @@ export default function EditCalendarPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const rawUser = localStorage.getItem('user');
 
-    if (!token || !rawUser) {
+    if (!rawUser) {
       router.push('/auth/login');
       return;
     }

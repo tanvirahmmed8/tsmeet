@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { pool } from '../db';
+import { acquireBookingLock, pool } from '../db';
 import {
   CalendarRecord,
   BookingRecord,
@@ -96,10 +96,16 @@ router.get('/:slug/slots', async (req: Request, res: Response) => {
 });
 
 router.post('/:slug/bookings', async (req: Request, res: Response) => {
+  let releaseBookingLock: (() => Promise<void>) | null = null;
   try {
     const calendar = await getCalendarBySlug(req.params.slug);
     if (!calendar) {
       return res.status(404).json({ error: 'Calendar not found' });
+    }
+
+    releaseBookingLock = await acquireBookingLock(calendar.id);
+    if (!releaseBookingLock) {
+      return res.status(503).json({ error: 'Booking service is busy. Please retry.' });
     }
 
     const settings = normalizeCalendarSettings(calendar.settings);
@@ -200,6 +206,8 @@ router.post('/:slug/bookings', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create public booking error:', error);
     res.status(500).json({ error: 'Failed to create booking' });
+  } finally {
+    await releaseBookingLock?.();
   }
 });
 

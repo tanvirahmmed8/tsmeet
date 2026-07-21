@@ -27,7 +27,8 @@ export function CalendarWorkspaceShell({
   actions,
   children,
 }: CalendarWorkspaceShellProps) {
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/';

@@ -45,16 +45,16 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [newRoomTitle, setNewRoomTitle] = useState('');
+  const [newRoomPassword, setNewRoomPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string>('');
   const [recordingCount, setRecordingCount] = useState(0);
   const [readyRecordingCount, setReadyRecordingCount] = useState(0);
   useEffect(() => {
     // Check authentication
-    const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
-    if (!token || !userData) {
+    if (!userData) {
       router.push('/auth/login');
       return;
     }
@@ -140,7 +140,7 @@ export default function DashboardPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title: newRoomTitle }),
+        body: JSON.stringify({ title: newRoomTitle, password: newRoomPassword }),
       });
 
       if (res.status === 401 || res.status === 403) {
@@ -152,6 +152,7 @@ export default function DashboardPage() {
         const newRoom = await res.json();
         setRooms([newRoom, ...rooms]);
         setNewRoomTitle('');
+        setNewRoomPassword('');
       } else {
         const data = await res.json().catch(() => null);
         setError(data?.error || 'Failed to create room');
@@ -173,7 +174,8 @@ export default function DashboardPage() {
     navigator.clipboard.writeText(link);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/');
@@ -264,13 +266,20 @@ export default function DashboardPage() {
 
                 <form onSubmit={createRoom} className="flex flex-1 flex-col gap-3">
                   <Input
-                    type="text"
-                    placeholder="Weekly team review"
+                    placeholder="Enter meeting title..."
                     value={newRoomTitle}
                     onChange={(e) => setNewRoomTitle(e.target.value)}
-                    className="h-12 rounded-2xl border-border/70 bg-background/72"
+                    className="h-12 bg-black/40 border-primary/20 focus-visible:ring-primary/30"
+                    maxLength={100}
                   />
-                  <Button
+                  <Input
+                    placeholder="Optional: Set a meeting password..."
+                    type="password"
+                    value={newRoomPassword}
+                    onChange={(e) => setNewRoomPassword(e.target.value)}
+                    className="h-12 bg-black/40 border-primary/20 focus-visible:ring-primary/30"
+                    maxLength={100}
+                  /><Button
                     type="submit"
                     disabled={creating || !newRoomTitle.trim()}
                     className="h-12 rounded-2xl bg-primary px-6 text-primary-foreground hover:bg-primary/90"

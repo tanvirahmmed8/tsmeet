@@ -2,8 +2,18 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
+import { z } from 'zod';
 
 const router = Router();
+const registerSchema = z.object({
+  email: z.string().trim().email().max(191).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+  name: z.string().trim().min(1).max(191),
+});
+const loginSchema = z.object({
+  email: z.string().trim().email().max(191).transform((value) => value.toLowerCase()),
+  password: z.string().min(1).max(128),
+});
 const getJwtSecret = () => {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
@@ -15,11 +25,9 @@ const getJwtSecret = () => {
 // Register
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, name } = req.body;
-
-    if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid registration data' });
+    const { email, password, name } = parsed.data;
 
     // Check if user already exists
     const userExists = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -58,11 +66,9 @@ router.post('/register', async (req: Request, res: Response) => {
 // Login
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Missing email or password' });
-    }
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid email or password' });
+    const { email, password } = parsed.data;
 
     // Find user
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);

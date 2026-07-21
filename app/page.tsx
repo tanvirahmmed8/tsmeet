@@ -11,6 +11,7 @@ import {
   Lock,
   ExternalLink,
   ArrowRight,
+  Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -187,6 +188,30 @@ export default function Home() {
                   <h3 className="font-semibold mb-2 text-foreground">Instant Chat</h3>
                   <p className="text-sm text-foreground/60 dark:text-foreground/70">
                     Real-time messaging during your meetings
+                  </p>
+                </div>
+
+                <div className="text-center group hover:-translate-y-1 transition-all duration-300 p-4 rounded-xl hover:bg-primary/5">
+                  <div className="mb-4 flex justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Video className="w-6 h-6 text-primary" />
+                    </div>
+                  </div>
+                  <h3 className="font-semibold mb-2 text-foreground">Cloud Recording</h3>
+                  <p className="text-sm text-foreground/60 dark:text-foreground/70">
+                    Record your meetings directly to the cloud
+                  </p>
+                </div>
+
+                <div className="text-center group hover:-translate-y-1 transition-all duration-300 p-4 rounded-xl hover:bg-primary/5">
+                  <div className="mb-4 flex justify-center">
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ImageIcon className="w-6 h-6 text-primary" />
+                    </div>
+                  </div>
+                  <h3 className="font-semibold mb-2 text-foreground">Virtual Backgrounds</h3>
+                  <p className="text-sm text-foreground/60 dark:text-foreground/70">
+                    Use custom images or blur your background
                   </p>
                 </div>
               </div>

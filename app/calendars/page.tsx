@@ -19,10 +19,9 @@ export default function CalendarsPage() {
   const [calendars, setCalendars] = useState<CalendarSummary[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const rawUser = localStorage.getItem('user');
 
-    if (!token || !rawUser) {
+    if (!rawUser) {
       router.push('/auth/login');
       return;
     }

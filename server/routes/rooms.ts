@@ -1,20 +1,35 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db';
+import { mediaProviderForRoom } from '../services/mediaProvider';
+import bcrypt from 'bcryptjs';
+import { createLiveKitRoom, deleteLiveKitRoom } from '../services/livekit';
 
 const router = Router();
 
 // Create a new meeting room
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, password } = req.body;
     const roomId = uuidv4();
     const userId = req.userId;
 
+    let passwordHash = null;
+    if (password && password.trim().length > 0) {
+      passwordHash = await bcrypt.hash(password.trim(), 10);
+    }
+
     const result = await pool.query(
-      'INSERT INTO rooms (id, title, description, creator_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [roomId, title || 'Untitled Meeting', description || '', userId]
+      'INSERT INTO rooms (id, title, description, creator_id, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id, title, description, creator_id, created_at, ended_at',
+      [roomId, title || 'Untitled Meeting', description || '', userId, passwordHash]
     );
+
+    try {
+      await createLiveKitRoom(roomId);
+    } catch (error) {
+      await pool.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+      throw error;
+    }
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -33,7 +48,11 @@ router.get('/:roomId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Room not found' });
     }
 
-    res.json(result.rows[0]);
+    const mediaProvider = mediaProviderForRoom(roomId);
+    res.json({
+      ...result.rows[0],
+      media_provider: mediaProvider,
+    });
   } catch (error) {
     console.error('Get room error:', error);
     res.status(500).json({ error: 'Failed to get room' });
@@ -70,6 +89,9 @@ router.post('/:roomId/end', async (req: Request, res: Response) => {
     if (String(room.creator_id) !== String(userId)) {
       return res.status(403).json({ error: 'Only room creator can end the meeting' });
     }
+
+    // Disconnect all media participants before closing the durable room.
+    await deleteLiveKitRoom(roomId);
 
     // Update room status to ended
     await pool.query('UPDATE rooms SET ended_at = NOW() WHERE id = $1', [roomId]);

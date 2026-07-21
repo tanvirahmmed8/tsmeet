@@ -39,10 +39,9 @@ export default function RecordingsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
-    if (!token || !userData) {
+    if (!userData) {
       router.push('/auth/login');
       return;
     }
@@ -152,7 +151,8 @@ export default function RecordingsPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/');

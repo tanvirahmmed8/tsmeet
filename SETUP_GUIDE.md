@@ -20,7 +20,7 @@ This guide covers setting up TSMeet from scratch, including frontend, backend, a
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tsmeet.git
+git clone https://github.com/tanvirahmmed8/tsmeet.git
 cd tsmeet
 
 # Or use the provided code directly
@@ -103,8 +103,8 @@ RECORDER_SERVICE_INSTANCE_ID=tsmeet-recorder-1
 BACKEND_URL=http://127.0.0.1:3002
 
 # Coturn Servers
-TURN_SERVER=turn:stun.l.google.com:3478
-STUN_SERVER=stun:stun.l.google.com:19302
+TURN_SERVER=turn:turn.example.com:3478
+STUN_SERVER=stun:turn.example.com:3478
 TURN_USERNAME=optional
 TURN_PASSWORD=optional
 
@@ -251,8 +251,8 @@ docker run -d \
 For testing/development:
 
 ```env
-# Google's free STUN server
-STUN_SERVER=stun:stun.l.google.com:19302
+# Your self-hosted LiveKit/Coturn STUN endpoint
+STUN_SERVER=stun:turn.example.com:3478
 
 # Twilio's TURN server (free tier available)
 TURN_SERVER=turn:numb.vivox.com:3478

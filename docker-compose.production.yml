@@ -1,0 +1,36 @@
+services:
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+
+  livekit:
+    volumes:
+      - ./infrastructure/livekit/livekit.production.yaml:/etc/livekit/livekit.yaml:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "3478:3478/udp"
+      - "443:5349/tcp"
+      - "50000-60000:50000-60000/udp"
+
+  minio:
+    ports: []
+
+  backend:
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+    ports:
+      - "127.0.0.1:3002:3002"
+
+  frontend:
+    ports:
+      - "127.0.0.1:3001:3001"

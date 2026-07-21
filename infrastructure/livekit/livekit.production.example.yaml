@@ -1,0 +1,39 @@
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+  congestion_control:
+    enabled: true
+    allow_pause: true
+
+redis:
+  address: redis:6379
+  password: replace-from-your-deployment-secret-store
+
+# Supply production keys with LIVEKIT_KEYS="api-key: api-secret" or render
+# this template from your deployment secret store.
+
+room:
+  auto_create: false
+  empty_timeout: 300
+  departure_timeout: 30
+  max_participants: 50
+
+turn:
+  enabled: true
+  udp_port: 3478
+  tls_port: 5349
+  domain: turn.example.com
+  cert_file: /etc/letsencrypt/live/turn.example.com/fullchain.pem
+  key_file: /etc/letsencrypt/live/turn.example.com/privkey.pem
+
+logging:
+  level: info
+  json: true
+
+prometheus_port: 6789

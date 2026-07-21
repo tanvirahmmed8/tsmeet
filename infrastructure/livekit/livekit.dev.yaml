@@ -1,0 +1,36 @@
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+  enable_loopback_candidate: true
+  congestion_control:
+    enabled: true
+    allow_pause: true
+
+redis:
+  address: redis:6379
+
+# Supply API credentials through LIVEKIT_KEYS. Secrets must never be committed.
+
+room:
+  auto_create: false
+  empty_timeout: 300
+  departure_timeout: 30
+  max_participants: 50
+
+turn:
+  enabled: true
+  udp_port: 3478
+  relay_range_start: 50101
+  relay_range_end: 50200
+
+logging:
+  level: info
+  json: true
+
+prometheus_port: 6789

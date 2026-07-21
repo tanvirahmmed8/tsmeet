@@ -17,6 +17,7 @@ interface Room {
   pending: Map<string, Participant>;
   hostSocketId?: string;
   hostUserId?: string;
+  coHosts: Set<string>; // userIds of co-hosts
   createdAt: Date;
 }
 
@@ -29,6 +30,7 @@ export class RoomManager {
         roomId,
         participants: new Map(),
         pending: new Map(),
+        coHosts: new Set(),
         createdAt: new Date(),
       });
     }
@@ -57,6 +59,23 @@ export class RoomManager {
   getHost(roomId: string) {
     const room = this.rooms.get(roomId);
     return room ? { socketId: room.hostSocketId, userId: room.hostUserId } : null;
+  }
+
+  isCoHost(roomId: string, userId: string) {
+    const room = this.rooms.get(roomId);
+    return room ? room.coHosts.has(userId) : false;
+  }
+
+  addCoHost(roomId: string, userId: string) {
+    const room = this.ensureRoom(roomId);
+    room.coHosts.add(userId);
+  }
+
+  removeCoHost(roomId: string, userId: string) {
+    const room = this.rooms.get(roomId);
+    if (room) {
+      room.coHosts.delete(userId);
+    }
   }
 
   getParticipant(roomId: string, socketId: string) {

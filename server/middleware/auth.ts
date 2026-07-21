@@ -17,7 +17,12 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   }
 
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const cookieToken = req.headers.cookie
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('tsmeet_session='))
+    ?.slice('tsmeet_session='.length);
+  const token = cookieToken || (authHeader && authHeader.split(' ')[1]);
 
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });

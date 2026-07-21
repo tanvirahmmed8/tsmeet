@@ -1,0 +1,19 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    { "type": "stat", "title": "Active rooms", "targets": [{ "expr": "tsmeet_active_rooms" }], "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 } },
+    { "type": "stat", "title": "Participants", "targets": [{ "expr": "tsmeet_active_participants" }], "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 } },
+    { "type": "timeseries", "title": "LiveKit network (bytes/sec)", "targets": [{ "expr": "sum(rate(livekit_packet_bytes{direction=\"incoming\"}[5m]))", "legendFormat": "ingress" }, { "expr": "sum(rate(livekit_packet_bytes{direction=\"outgoing\"}[5m]))", "legendFormat": "egress" }], "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 } },
+    { "type": "timeseries", "title": "HTTP latency p95", "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(tsmeet_http_request_duration_seconds_bucket[5m])))" }], "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 } },
+    { "type": "timeseries", "title": "Recording failures", "targets": [{ "expr": "increase(tsmeet_recording_failures_total[1h])" }], "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 } },
+    { "type": "timeseries", "title": "Client network quality", "targets": [{ "expr": "sum by (quality) (rate(tsmeet_network_quality_reports_total[5m]))", "legendFormat": "{{quality}}" }], "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 } }
+  ],
+  "schemaVersion": 39,
+  "tags": ["tsmeet", "livekit"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "TSMeet Operations",
+  "uid": "tsmeet-operations",
+  "version": 1
+}
