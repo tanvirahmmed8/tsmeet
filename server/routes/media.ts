@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { pool } from '../db';
-import { createParticipantToken } from '../services/livekit';
+import { createParticipantToken, ensureLiveKitRoom } from '../services/livekit';
 import { mediaProviderForRoom } from '../services/mediaProvider';
 
 const router = Router();
@@ -55,6 +55,9 @@ router.post('/token', async (req: Request, res: Response) => {
       : result.rows[0].role === 'co-host'
         ? 'co-host'
         : 'guest';
+    // LiveKit removes empty rooms after empty_timeout. Recreate it only after
+    // TSMeet has authenticated and authorized this participant.
+    await ensureLiveKitRoom(roomId);
     const credentials = await createParticipantToken({ roomId, userId, displayName, role });
     return res.json({ ...credentials, provider });
   } catch (error) {

@@ -33,12 +33,36 @@ export function getRoomServiceClient() {
   );
 }
 
-export async function createLiveKitRoom(roomId: string) {
-  return getRoomServiceClient().createRoom({
+type LiveKitRoomAdminClient = Pick<RoomServiceClient, 'listRooms' | 'createRoom'>;
+
+function liveKitRoomOptions(roomId: string) {
+  return {
     name: livekitRoomName(roomId),
     maxParticipants: 50,
     emptyTimeout: 300,
-  });
+  };
+}
+
+export async function createLiveKitRoom(roomId: string) {
+  return getRoomServiceClient().createRoom(liveKitRoomOptions(roomId));
+}
+
+export async function ensureLiveKitRoom(
+  roomId: string,
+  client: LiveKitRoomAdminClient = getRoomServiceClient()
+) {
+  const roomName = livekitRoomName(roomId);
+  const existing = await client.listRooms([roomName]);
+  if (existing.some((room) => room.name === roomName)) return;
+
+  try {
+    await client.createRoom(liveKitRoomOptions(roomId));
+  } catch (error) {
+    // Two authorized participants can request tokens concurrently after an
+    // empty room expires. Accept the create race only if the room now exists.
+    const raced = await client.listRooms([roomName]);
+    if (!raced.some((room) => room.name === roomName)) throw error;
+  }
 }
 
 export async function deleteLiveKitRoom(roomId: string) {
