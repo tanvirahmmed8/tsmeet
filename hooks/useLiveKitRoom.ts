@@ -56,9 +56,11 @@ interface RaisedHand {
 function mediaStreamForParticipant(participant: Participant, screenShare = false) {
   const tracks = Array.from(participant.trackPublications.values())
     .filter((publication) =>
-      screenShare
-        ? publication.source === Track.Source.ScreenShare || publication.source === Track.Source.ScreenShareAudio
-        : publication.source !== Track.Source.ScreenShare && publication.source !== Track.Source.ScreenShareAudio
+      !publication.isMuted && (
+        screenShare
+          ? publication.source === Track.Source.ScreenShare || publication.source === Track.Source.ScreenShareAudio
+          : publication.source !== Track.Source.ScreenShare && publication.source !== Track.Source.ScreenShareAudio
+      )
     )
     .map((publication) => publication.track?.mediaStreamTrack)
     .filter((track): track is MediaStreamTrack => Boolean(track));
@@ -227,6 +229,20 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     room.on(RoomEvent.TrackUnsubscribed, syncRemoteParticipants);
     room.on(RoomEvent.TrackPublished, syncRemoteParticipants);
     room.on(RoomEvent.TrackUnpublished, syncRemoteParticipants);
+    room.on(RoomEvent.TrackMuted, (_publication, participant) => {
+      if (participant.isLocal) {
+        syncLocalStream(room.localParticipant);
+      } else {
+        syncRemoteParticipants();
+      }
+    });
+    room.on(RoomEvent.TrackUnmuted, (_publication, participant) => {
+      if (participant.isLocal) {
+        syncLocalStream(room.localParticipant);
+      } else {
+        syncRemoteParticipants();
+      }
+    });
     room.on(RoomEvent.ParticipantConnected, syncRemoteParticipants);
     room.on(RoomEvent.ParticipantDisconnected, syncRemoteParticipants);
     room.on(RoomEvent.TrackPublished, applySubscriptionPolicy);
@@ -238,6 +254,24 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     room.on(RoomEvent.Disconnected, () => {
       setPeers([]);
       setNetworkQuality('Unknown');
+      // LiveKit room deletion is the authoritative fallback when a signaling
+      // event is missed during reconnect. Confirm durable room state before
+      // treating an unexpected media disconnect as an ended meeting.
+      void fetch(`/api/rooms/${roomId}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+        .then(async (response) => response.ok ? response.json() : null)
+        .then((roomData) => {
+          if (roomData?.ended_at) {
+            setMeetingEnded(true);
+            setJoinStatus('denied');
+            setError('The meeting has ended.');
+          }
+        })
+        .catch(() => {
+          // Socket.IO reconnection remains responsible for transient failures.
+        });
     });
     room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
       if (!participant.isLocal) return;
@@ -498,7 +532,10 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
         setError(cause instanceof Error ? cause.message : 'Unable to connect media');
       }
     });
-    socket.on('join-denied', (data) => { setJoinStatus('denied'); setError(data?.message || null); });
+    socket.on('join-denied', (data) => {
+      setJoinStatus('denied');
+      setError(data?.message || 'The server could not authorize this account for the meeting.');
+    });
     socket.on('password-required', () => setJoinStatus('password-required'));
     socket.on('password-incorrect', () => setJoinStatus('password-incorrect'));
     socket.on('join-request', (request: JoinRequest) => setPendingRequests((items) =>

@@ -8,10 +8,10 @@ cd "${PROJECT_DIR}"
 ./deploy/dc config --quiet
 ./deploy/dc pull
 ./deploy/dc build --pull backend frontend
-./deploy/dc up -d mysql redis minio
+./deploy/dc up -d mysql redis
 
 echo "Waiting for database and cache health checks..."
-for service in mysql redis minio; do
+for service in mysql redis; do
   container_id="$(./deploy/dc ps -q "${service}")"
   [[ -n "${container_id}" ]] || { echo "${service} container was not created."; exit 1; }
   for _ in $(seq 1 60); do
@@ -37,6 +37,6 @@ done
 ./deploy/dc ps
 
 curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:3002/api/health
-curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:9100/minio/health/live
 curl --fail --retry 20 --retry-delay 3 http://127.0.0.1:3001 >/dev/null
-echo "TSMeet deployment completed. Configure Nginx/Certbot, then enable TURN."
+echo "TSMeet lightweight deployment completed. Recording and observability profiles are disabled."
+echo "Configure Nginx/Certbot, then enable TURN. See docs/OPTIONAL_DOCKER_PROFILES.md for later upgrades."

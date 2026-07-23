@@ -494,12 +494,12 @@ $dc up -d --build
 $dc ps
 ```
 
-Expected long-running services include frontend, backend, MySQL, Redis, LiveKit, MinIO, Egress, Prometheus, Grafana, Loki, Promtail, cAdvisor, and exporters. `minio-init` is a one-shot job and may show `Exited (0)` after creating the bucket; that is normal.
+The default low-resource deployment runs only frontend, backend, MySQL, Redis, and LiveKit. Recording and observability are optional Docker profiles; see [Optional Docker Profiles](docs/OPTIONAL_DOCKER_PROFILES.md). When recording is enabled, `minio-init` is a one-shot job and may show `Exited (0)` after creating the bucket; that is normal.
 
 Check startup logs:
 
 ```bash
-$dc logs --tail=100 backend frontend livekit egress mysql redis minio
+$dc logs --tail=100 backend frontend livekit mysql redis
 ```
 
 ## 12. Production verification
@@ -510,6 +510,7 @@ Run these from the VPS:
 curl -fsS https://meet.example.com >/dev/null && echo "frontend OK"
 curl -fsS https://api.example.com/api/health
 curl -fsS http://127.0.0.1:7880 >/dev/null && echo "LiveKit HTTP reachable"
+# Run only after enabling the recording profile:
 curl -kfsS https://api.example.com:9443/minio/health/live && echo "MinIO proxy OK"
 $dc exec redis sh -c 'redis-cli -a "$REDIS_PASSWORD" ping'
 $dc exec mysql mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD"

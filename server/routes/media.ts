@@ -14,6 +14,9 @@ router.post('/token', async (req: Request, res: Response) => {
     if (!userId || !roomId || !displayName || displayName.length > 100) {
       return res.status(400).json({ error: 'A valid roomId and displayName are required' });
     }
+    if (req.user?.guest && req.user?.roomId !== roomId) {
+      return res.status(403).json({ error: 'This guest session belongs to a different meeting' });
+    }
 
     const provider = mediaProviderForRoom(roomId);
     if (provider !== 'livekit') {

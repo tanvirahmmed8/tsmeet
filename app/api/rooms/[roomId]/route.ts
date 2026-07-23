@@ -18,11 +18,13 @@ export async function GET(
     const { roomId } = await params;
     const backend = getBackendBaseUrl();
     const auth = request.headers.get('authorization') || '';
+    const cookie = request.headers.get('cookie') || '';
 
     const res = await fetch(`${backend}/api/rooms/${roomId}`, {
       method: 'GET',
       headers: {
         ...(auth ? { Authorization: auth } : {}),
+        ...(cookie ? { Cookie: cookie } : {}),
       },
       cache: 'no-store',
     });

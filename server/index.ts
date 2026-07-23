@@ -25,6 +25,7 @@ import { closeRedis, configureRedisAdapter, isRedisReady } from './services/redi
 import { requestContext } from './middleware/requestContext';
 import { receiveLiveKitWebhook } from './routes/livekitWebhook';
 import {
+  deleteLiveKitRoom,
   muteLiveKitParticipant,
   removeLiveKitParticipant,
   updateLiveKitRole,
@@ -184,12 +185,19 @@ io.on('connection', (socket) => {
     ?.slice('tsmeet_session='.length) || null;
   const token = cookieToken || authToken || bearerToken;
   let authenticatedUserId: string | null = null;
+  let authenticatedGuestRoomId: string | null = null;
 
   if (jwtSecret && token) {
     try {
-      const decoded = jwt.verify(token, jwtSecret) as { userId?: string | number };
+      const decoded = jwt.verify(token, jwtSecret) as {
+        userId?: string | number;
+        guest?: boolean;
+        roomId?: string;
+      };
       if (decoded?.userId !== undefined && decoded?.userId !== null) {
         authenticatedUserId = String(decoded.userId);
+        authenticatedGuestRoomId =
+          decoded.guest && typeof decoded.roomId === 'string' ? decoded.roomId : null;
       }
     } catch {
       socket.emit('auth-error', { message: 'Invalid auth token' });
@@ -220,11 +228,18 @@ io.on('connection', (socket) => {
     if (!roomId || !userId) return;
 
     let effectiveAuthenticatedUserId = authenticatedUserId;
+    let effectiveGuestRoomId = authenticatedGuestRoomId;
     if (!effectiveAuthenticatedUserId && jwtSecret && typeof payloadToken === 'string' && payloadToken) {
       try {
-        const decoded = jwt.verify(payloadToken, jwtSecret) as { userId?: string | number };
+        const decoded = jwt.verify(payloadToken, jwtSecret) as {
+          userId?: string | number;
+          guest?: boolean;
+          roomId?: string;
+        };
         if (decoded?.userId !== undefined && decoded?.userId !== null) {
           effectiveAuthenticatedUserId = String(decoded.userId);
+          effectiveGuestRoomId =
+            decoded.guest && typeof decoded.roomId === 'string' ? decoded.roomId : null;
         }
       } catch {
         socket.emit('auth-error', { message: 'Invalid auth token' });
@@ -232,7 +247,17 @@ io.on('connection', (socket) => {
     }
 
     if (!effectiveAuthenticatedUserId || effectiveAuthenticatedUserId !== String(userId)) {
-      socket.emit('join-denied', { roomId });
+      socket.emit('join-denied', {
+        roomId,
+        message: 'Your meeting session could not be authenticated. Sign in again and retry.',
+      });
+      return;
+    }
+    if (effectiveGuestRoomId && effectiveGuestRoomId !== String(roomId)) {
+      socket.emit('join-denied', {
+        roomId,
+        message: 'This guest session belongs to a different meeting.',
+      });
       return;
     }
 
@@ -361,7 +386,7 @@ io.on('connection', (socket) => {
       console.log(`[Room ${roomId}] User ${joiningUserId} waiting approval`);
     } catch (error) {
       console.error(`[Room ${roomId}] Failed to process join request:`, error);
-      socket.emit('join-denied', { roomId });
+      socket.emit('join-denied', { roomId, message: 'The server could not process the join request.' });
     }
   });
 
@@ -783,13 +808,15 @@ io.on('connection', (socket) => {
           emitRecordingSession(roomId);
         }
       }
-      io.to(roomId).emit('meeting-ended', { roomId });
-      roomManager.endRoom(roomId);
-
       const roomSockets = await io.in(roomId).fetchSockets();
       roomSockets.forEach((roomSocket) => {
-        roomSocket.leave(roomId);
+        roomSocket.emit('meeting-ended', { roomId });
       });
+
+      await deleteLiveKitRoom(roomId).catch((error) => {
+        console.warn(`[Room ${roomId}] LiveKit room deletion failed`, error);
+      });
+      roomManager.endRoom(roomId);
 
       console.log(`[Room ${roomId}] Meeting ended by host ${host.userId}`);
       audit(roomId, 'room.ended');

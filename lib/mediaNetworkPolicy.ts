@@ -29,7 +29,12 @@ export function classifyNetworkSample(sample: NetworkSample): { tier: NetworkTie
   const lossRatio = total >= 20 ? lost / total : null;
   const jitter = sample.jitterMs ?? 0;
   const rtt = sample.rttMs ?? 0;
-  const bitrate = sample.availableIncomingBitrate ?? Number.POSITIVE_INFINITY;
+  // Browser bandwidth estimates are noisy while a track is starting or idle.
+  // Only trust them when this interval also contains enough RTP traffic.
+  const bitrate =
+    total >= 20
+      ? sample.availableIncomingBitrate ?? Number.POSITIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
 
   if ((lossRatio !== null && lossRatio >= 0.15) || jitter >= 120 || rtt >= 800 || bitrate < 250_000) {
     return { tier: 'critical', lossRatio };
@@ -51,7 +56,8 @@ export function evaluateNetworkSample(
   if (rank[classified.tier] > rank[state.tier]) {
     const sameCandidate = state.candidateTier === classified.tier;
     const candidateSamples = sameCandidate ? state.candidateSamples + 1 : 1;
-    const required = classified.tier === 'critical' ? 1 : 2;
+    // Do not collapse video after one transient WebRTC statistics interval.
+    const required = 2;
     if (candidateSamples >= required) {
       return { tier: classified.tier, candidateTier: null, candidateSamples: 0, healthySamples: 0, action: 'degrade', lossRatio: classified.lossRatio };
     }

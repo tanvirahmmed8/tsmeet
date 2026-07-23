@@ -120,12 +120,12 @@ export default function RoomPage() {
   const roomId = params.roomId as string;
   const autoRecordEnabled = searchParams.get('autoRecord') === '1';
 
-  const [userId] = useState(() => {
+  const [userId, setUserId] = useState(() => {
     const user = getStoredUser();
     return String(user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`));
   });
 
-  const [userName] = useState(() => {
+  const [userName, setUserName] = useState(() => {
     const user = getStoredUser();
     return String(user?.name ?? 'Guest');
   });
@@ -142,6 +142,9 @@ export default function RoomPage() {
   const [isCreator, setIsCreator] = useState(false);
   const [creatorChecked, setCreatorChecked] = useState(false);
   const [mediaProvider, setMediaProvider] = useState<MeetingMediaProvider>(null);
+  const [guestSessionReady, setGuestSessionReady] = useState(false);
+  const [guestSessionError, setGuestSessionError] = useState<string | null>(null);
+  const [guestSessionLoading, setGuestSessionLoading] = useState(false);
 
   const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "participants" | "host" | null>(null);
   const [participantSearch, setParticipantSearch] = useState('');
@@ -247,8 +250,6 @@ export default function RoomPage() {
   }, [localStream]);
 
   useEffect(() => {
-    if (!localStream) return;
-
     const syncDevices = async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -265,8 +266,8 @@ export default function RoomPage() {
         setSpeakerDevices(nextSpeakers);
         setCameraDevices(nextCameras);
 
-        const activeMicDeviceId = localStream.getAudioTracks()[0]?.getSettings().deviceId;
-        const activeCameraDeviceId = localStream.getVideoTracks()[0]?.getSettings().deviceId;
+        const activeMicDeviceId = localStream?.getAudioTracks()[0]?.getSettings().deviceId;
+        const activeCameraDeviceId = localStream?.getVideoTracks()[0]?.getSettings().deviceId;
         if (activeMicDeviceId) {
           setSelectedMicrophoneId(activeMicDeviceId);
         } else if (nextMicrophones.some((device) => device.deviceId === 'default')) {
@@ -326,7 +327,7 @@ export default function RoomPage() {
     const storedUser = getStoredUser();
     const guestName = typeof window !== 'undefined' ? localStorage.getItem('guestName') : null;
 
-    if (!storedUser) {
+    if (!storedUser && !guestSessionReady) {
       setNeedsName(true);
       if (guestName && !displayName) {
         setDisplayName(guestName);
@@ -354,7 +355,7 @@ export default function RoomPage() {
     };
 
     loadRoom();
-  }, [roomId, userId, displayName]);
+  }, [roomId, userId, displayName, guestSessionReady]);
 
   useEffect(() => {
     if (joinInitiated) return;
@@ -679,14 +680,34 @@ export default function RoomPage() {
     ? selectedCameraId
     : undefined;
 
-  const submitGuestName = () => {
+  const submitGuestName = async () => {
     if (!displayName.trim()) return;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('guestName', displayName.trim());
+    setGuestSessionLoading(true);
+    setGuestSessionError(null);
+    try {
+      const response = await fetch('/api/auth/guest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, name: displayName.trim() }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.user?.id) {
+        throw new Error(data?.error || 'Unable to start the guest session.');
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('guestName', displayName.trim());
+      }
+      setUserId(String(data.user.id));
+      setUserName(String(data.user.name || displayName.trim()));
+      setGuestSessionReady(true);
+      setCreatorChecked(false);
+      setJoinInitiated(false);
+      setNeedsName(false);
+    } catch (error) {
+      setGuestSessionError(error instanceof Error ? error.message : 'Unable to join this meeting.');
+    } finally {
+      setGuestSessionLoading(false);
     }
-    setNeedsName(false);
-    requestJoin({ userName: displayName.trim(), isHost: false });
-    setJoinInitiated(true);
   };
 
   const retryJoin = () => {
@@ -852,10 +873,13 @@ export default function RoomPage() {
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
           />
+          {guestSessionError && (
+            <p className="text-sm text-red-400" role="alert">{guestSessionError}</p>
+          )}
 
           <DialogFooter>
-            <Button onClick={submitGuestName} disabled={!displayName.trim()}>
-              Join meeting
+            <Button onClick={() => void submitGuestName()} disabled={!displayName.trim() || guestSessionLoading}>
+              {guestSessionLoading ? 'Joining…' : 'Join meeting'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1367,7 +1391,9 @@ export default function RoomPage() {
                     {joinStatus === 'denied' && (
                       <div className="text-center p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                         <h3 className="text-red-200 font-medium">Join Denied</h3>
-                        <p className="text-red-100/60 text-sm mt-1">The host denied your request to join.</p>
+                        <p className="text-red-100/60 text-sm mt-1">
+                          {webrtcError || 'The meeting server denied the join request.'}
+                        </p>
                         <Button onClick={retryJoin} variant="outline" className="mt-3 border-red-500/30">Request Again</Button>
                       </div>
                     )}
@@ -1813,7 +1839,7 @@ export default function RoomPage() {
                     ))
                   ) : (
                     <div className="px-3 py-2 text-sm text-white/60">
-                      Turn camera on to load available devices.
+                      No camera detected. Check browser site permissions.
                     </div>
                   )}
                 </SelectContent>
@@ -1883,13 +1909,13 @@ export default function RoomPage() {
         ) : null}
 
         {audioSettingsOpen ? (
-          <div className="mx-auto mb-3 flex w-full max-w-5xl flex-wrap items-center gap-3 rounded-[28px] border border-white/10 bg-white/5 px-3 py-3 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.7)]">
-            <div className="min-w-[240px] flex-1">
+          <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-[28px] border border-white/10 bg-white/5 p-3 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.7)]">
+            <div className="min-w-0">
               <Select value={selectedMicrophoneValue} onValueChange={handleMicrophoneSelect}>
                 <SelectTrigger className="h-12 w-full rounded-full border-white/10 bg-transparent text-white" title={selectedMicrophoneLabel}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Mic className="w-4 h-4 text-white/70" />
-                    <SelectValue placeholder="Select microphone" />
+                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                    <Mic className="h-4 w-4 shrink-0 text-white/70" />
+                    <span className="min-w-0 flex-1 truncate text-left"><SelectValue placeholder="Select microphone" /></span>
                   </div>
                 </SelectTrigger>
                 <SelectContent className="border-white/10 bg-slate-950 text-white">
@@ -1901,19 +1927,29 @@ export default function RoomPage() {
                     ))
                   ) : (
                     <div className="px-3 py-2 text-sm text-white/60">
-                      Turn microphone on to load available devices.
+                      No microphone detected. Check browser site permissions.
                     </div>
                   )}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="min-w-[240px] flex-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="row-span-2 h-12 w-12 self-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+              onClick={() => setAudioSettingsOpen(false)}
+              title="Collapse audio settings"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+
+            <div className="min-w-0">
               <Select value={selectedSpeakerValue} onValueChange={handleSpeakerSelect}>
                 <SelectTrigger className="h-12 w-full rounded-full border-white/10 bg-transparent text-white" title={selectedSpeakerLabel}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Volume2 className="w-4 h-4 text-white/70" />
-                    <SelectValue placeholder="Select speakers" />
+                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                    <Volume2 className="h-4 w-4 shrink-0 text-white/70" />
+                    <span className="min-w-0 flex-1 truncate text-left"><SelectValue placeholder="Select speakers" /></span>
                   </div>
                 </SelectTrigger>
                 <SelectContent className="border-white/10 bg-slate-950 text-white">
@@ -1925,22 +1961,12 @@ export default function RoomPage() {
                     ))
                   ) : (
                     <div className="px-3 py-2 text-sm text-white/60">
-                      Enable audio to load speaker outputs.
+                      No selectable speaker output is available in this browser.
                     </div>
                   )}
                 </SelectContent>
               </Select>
             </div>
-
-            <Button
-              size="lg"
-              variant="ghost"
-              className="rounded-full text-white/70 hover:bg-white/10 hover:text-white"
-              onClick={() => setAudioSettingsOpen(false)}
-              title="Collapse audio settings"
-            >
-              <Settings className="w-5 h-5" />
-            </Button>
           </div>
         ) : null}
 

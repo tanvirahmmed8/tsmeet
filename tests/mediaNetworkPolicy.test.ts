@@ -20,10 +20,24 @@ test('requires sustained poor samples before degrading', () => {
   assert.equal(second.tier, 'poor');
 });
 
-test('critical conditions degrade immediately', () => {
-  const result = evaluateNetworkSample(excellent, { packetsReceivedDelta: 80, packetsLostDelta: 20 });
-  assert.equal(result.action, 'degrade');
-  assert.equal(result.tier, 'critical');
+test('critical conditions require two sustained samples before degrading', () => {
+  const first = evaluateNetworkSample(excellent, { packetsReceivedDelta: 80, packetsLostDelta: 20 });
+  assert.equal(first.action, 'none');
+  assert.equal(first.tier, 'excellent');
+  const second = evaluateNetworkSample(first, { packetsReceivedDelta: 80, packetsLostDelta: 20 });
+  assert.equal(second.action, 'degrade');
+  assert.equal(second.tier, 'critical');
+});
+
+test('ignores bandwidth estimates when an interval contains no RTP traffic', () => {
+  assert.equal(
+    classifyNetworkSample({
+      packetsReceivedDelta: 0,
+      packetsLostDelta: 0,
+      availableIncomingBitrate: 100_000,
+    }).tier,
+    'excellent'
+  );
 });
 
 test('recovery requires three healthy samples and moves conservatively', () => {

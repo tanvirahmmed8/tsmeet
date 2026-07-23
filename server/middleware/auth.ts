@@ -32,6 +32,17 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
+    if (user?.guest) {
+      const guestRoomId = typeof user.roomId === 'string' ? user.roomId : '';
+      const allowedRoomRead =
+        req.baseUrl === '/api/rooms' &&
+        req.method === 'GET' &&
+        req.path === `/${guestRoomId}`;
+      const allowedMediaRequest = req.baseUrl === '/api/media';
+      if (!allowedRoomRead && !allowedMediaRequest) {
+        return res.status(403).json({ error: 'Guest access is limited to this meeting' });
+      }
+    }
     req.userId = user.userId;
     req.user = user;
     next();
