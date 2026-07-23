@@ -96,6 +96,12 @@ type OutputCapableVideoElement = HTMLVideoElement & {
 };
 
 function getSignalingServerUrl() {
+  // Production signaling stays on the frontend origin. The HttpOnly session
+  // cookie is host-scoped and cannot authenticate a WebSocket opened directly
+  // against a different API subdomain.
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
   const url = process.env.NEXT_PUBLIC_SIGNALING_SERVER || 'http://localhost:3002';
   return url.replace(/\/+$/, '');
 }

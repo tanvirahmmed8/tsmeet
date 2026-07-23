@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBackendBaseUrl } from '@/app/api/_proxy';
+import { getBackendBaseUrl } from '../../_proxy';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +18,18 @@ export async function POST(request: NextRequest) {
       cache: 'no-store',
     });
     const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      console.warn('[api/media/token] Backend rejected media-token request', {
+        status: response.status,
+        hasSessionCookie: cookie.includes('tsmeet_session='),
+        hasAuthorization: Boolean(authorization),
+      });
+    }
     return NextResponse.json(data ?? { error: 'Unexpected backend response' }, { status: response.status });
   } catch (error) {
-    console.error('[api/media/token] Proxy error:', error);
+    console.error('[api/media/token] Backend request failed', {
+      error: error instanceof Error ? error.message : 'Unknown proxy error',
+    });
     return NextResponse.json({ error: 'Backend server is unavailable' }, { status: 502 });
   }
 }

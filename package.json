@@ -9,7 +9,7 @@
     "start": "next start -p 3001",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
-    "test": "ts-node --project server/tsconfig.json server/tests/calendarService.test.ts && ts-node --project server/tsconfig.json server/tests/mediaProvider.test.ts && ts-node --project server/tsconfig.json server/tests/storageQuota.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaNetworkPolicy.test.ts && ts-node --files --project server/tsconfig.json server/tests/recordingFullStorage.test.ts && node scripts/validate-tls-renewal-config.cjs",
+    "test": "ts-node --project server/tsconfig.json server/tests/calendarService.test.ts && ts-node --project server/tsconfig.json server/tests/mediaProvider.test.ts && ts-node --project server/tsconfig.json server/tests/storageQuota.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaNetworkPolicy.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaTokenProxy.test.ts && ts-node --files --project server/tsconfig.json server/tests/recordingFullStorage.test.ts && node scripts/validate-tls-renewal-config.cjs",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {

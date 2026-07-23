@@ -199,7 +199,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const connectToLiveKit = useCallback(async () => {
     if (config.enabled === false) return;
     if (roomRef.current?.state === ConnectionState.Connected) return;
-    const response = await fetch(`${config.signalingServer.replace(/\/$/, '')}/api/media/token`, {
+    const response = await fetch('/api/media/token', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -295,7 +295,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     syncLocalStream(room.localParticipant);
     syncRemoteParticipants();
     applySubscriptionPolicy();
-  }, [applySubscriptionPolicy, config.enabled, config.signalingServer, config.userName, isLowDataMode, roomId, syncLocalStream, syncRemoteParticipants]);
+  }, [applySubscriptionPolicy, config.enabled, config.userName, isLowDataMode, roomId, syncLocalStream, syncRemoteParticipants]);
   const connectToLiveKitRef = useRef(connectToLiveKit);
 
   useEffect(() => {
