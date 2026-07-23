@@ -5,7 +5,7 @@ PROJECT_DIR="${PROJECT_DIR:-/opt/tsmeet}"
 cd "${PROJECT_DIR}"
 
 ./deploy/configure-app.sh
-./deploy/dc config --quiet
+./deploy/verify-production-config.sh
 ./deploy/dc pull
 ./deploy/dc build --pull backend frontend
 ./deploy/dc up -d mysql redis
@@ -23,7 +23,7 @@ for service in mysql redis; do
   [[ "${status}" == "healthy" ]] || { echo "Timed out waiting for ${service}."; exit 1; }
 done
 
-./deploy/dc up -d livekit
+./deploy/dc up -d --force-recreate livekit
 livekit_id="$(./deploy/dc ps -q livekit)"
 for _ in $(seq 1 60); do
   status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${livekit_id}")"

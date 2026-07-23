@@ -57,9 +57,16 @@ if values["NEXT_PUBLIC_SIGNALING_SERVER"].rstrip("/") != values["FRONTEND_URL"].
 content = template_path.read_text(encoding="utf-8")
 if content.count("__REDIS_PASSWORD__") != 1:
     raise SystemExit("LiveKit template must contain exactly one __REDIS_PASSWORD__ placeholder")
-config_path.write_text(content.replace("__REDIS_PASSWORD__", values["REDIS_PASSWORD"]), encoding="utf-8")
+rendered = content.replace("__REDIS_PASSWORD__", values["REDIS_PASSWORD"])
+required_rtc_lines = ("  tcp_port: 7881", "  udp_port: 7882", "  use_external_ip: true")
+missing_rtc = [line.strip() for line in required_rtc_lines if line not in rendered]
+if missing_rtc:
+    raise SystemExit("LiveKit production RTC template is missing: " + ", ".join(missing_rtc))
+if "port_range_start" in rendered or "port_range_end" in rendered:
+    raise SystemExit("LiveKit production RTC must use udp_port: 7882, not an RTC port range")
+config_path.write_text(rendered, encoding="utf-8")
 PY
 
 chmod 600 .env "${LIVEKIT_CONFIG}"
-"${PROJECT_DIR}/deploy/dc" config --quiet
+"${PROJECT_DIR}/deploy/verify-production-config.sh"
 echo "Application configuration generated successfully (TURN remains disabled until certificates exist)."

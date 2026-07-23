@@ -30,11 +30,17 @@ logging:'''
 updated, count = re.subn(r"turn:\n.*?\nlogging:", replacement, content, count=1, flags=re.DOTALL)
 if count != 1:
     raise SystemExit("Could not find the LiveKit turn block")
+required_rtc_lines = ("  tcp_port: 7881", "  udp_port: 7882", "  use_external_ip: true")
+missing_rtc = [line.strip() for line in required_rtc_lines if line not in updated]
+if missing_rtc:
+    raise SystemExit("TURN update did not preserve production RTC settings: " + ", ".join(missing_rtc))
+if "port_range_start" in updated or "port_range_end" in updated:
+    raise SystemExit("TURN update must not restore an RTC port range")
 path.write_text(updated, encoding="utf-8")
 PY
 
 chmod 600 "${CONFIG}"
-"${PROJECT_DIR}/deploy/dc" config --quiet
+"${PROJECT_DIR}/deploy/verify-production-config.sh"
 "${PROJECT_DIR}/deploy/dc" restart livekit
 "${PROJECT_DIR}/deploy/dc" ps livekit
 echo "Embedded LiveKit TURN enabled for ${API_DOMAIN}:3478/udp and :5349/tcp."

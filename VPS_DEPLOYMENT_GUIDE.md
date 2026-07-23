@@ -481,11 +481,24 @@ Validate the merged configuration before starting anything:
 
 ```bash
 $dc config --quiet
+./deploy/verify-production-config.sh
 $dc config > /tmp/tsmeet-resolved-compose.yml
 grep -n "published:" /tmp/tsmeet-resolved-compose.yml
+# This must return no output:
+$dc config | grep -E '50000|60000'
 ```
 
 The resolved bindings must show `127.0.0.1` for frontend, backend, LiveKit `7880/6789`, MinIO, Prometheus, and Grafana. MySQL and Redis must have no published host ports.
+
+For the media-token and UDP-mux rollout, rebuild the `frontend` image because
+`hooks/useLiveKitRoom.ts` is bundled at build time, and recreate `livekit` so it
+loads the rendered YAML and new UDP port mapping. No database container or
+volume needs deletion. Never use `docker compose down -v`.
+
+```bash
+$dc up -d --build frontend
+$dc up -d --force-recreate livekit
+```
 
 Build and start the full product:
 
