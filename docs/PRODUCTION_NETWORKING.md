@@ -46,12 +46,16 @@ Allow inbound traffic only for:
 ```text
 TCP 80,443          web/ACME and TURN/TLS (on their respective IPs)
 TCP 7881            LiveKit ICE/TCP fallback
+UDP 7882            LiveKit WebRTC media (UDP mux)
 UDP 3478            TURN/UDP
-UDP 50000-60000     LiveKit WebRTC media
 TCP 22              restricted administration source addresses only
 ```
 
 Do not expose Redis, MySQL, MinIO, Egress health, or Docker daemon ports publicly.
+
+The VPS deployment uses LiveKit's single UDP mux port (`7882/udp`) instead of
+publishing a large RTC port range. This avoids creating thousands of Docker NAT
+rules and keeps startup and firewall overhead low on small VPS instances.
 
 ## Credential rotation
 

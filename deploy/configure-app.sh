@@ -48,6 +48,11 @@ if any(marker in env_path.read_text(encoding="utf-8") for marker in
 expected_keys = f"{values['LIVEKIT_API_KEY']}: {values['LIVEKIT_API_SECRET']}"
 if values["LIVEKIT_KEYS"] != expected_keys:
     raise SystemExit("LIVEKIT_KEYS must exactly equal 'LIVEKIT_API_KEY: LIVEKIT_API_SECRET'")
+if values["NEXT_PUBLIC_SIGNALING_SERVER"].rstrip("/") != values["FRONTEND_URL"].rstrip("/"):
+    raise SystemExit(
+        "NEXT_PUBLIC_SIGNALING_SERVER must equal FRONTEND_URL in production "
+        "so the HttpOnly session cookie authenticates Socket.IO"
+    )
 
 content = template_path.read_text(encoding="utf-8")
 if content.count("__REDIS_PASSWORD__") != 1:

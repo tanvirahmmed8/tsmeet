@@ -51,9 +51,9 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 9443/tcp
 ufw allow 7881/tcp
+ufw allow 7882/udp
 ufw allow 5349/tcp
 ufw allow 3478/udp
-ufw allow 50000:60000/udp
 ufw --force enable
 
 echo "Server dependencies installed."

@@ -47,7 +47,7 @@ Internet
   |      Nginx -> 127.0.0.1:9100 -> MinIO recording downloads
   |
   +-- VPS_PUBLIC_IP:7881/tcp             LiveKit WebRTC/TCP fallback
-  +-- VPS_PUBLIC_IP:50000-60000/udp      LiveKit WebRTC media
+  +-- VPS_PUBLIC_IP:7882/udp             LiveKit WebRTC media (UDP mux)
   +-- api.example.com:3478/udp           embedded TURN/UDP
   +-- api.example.com:5349/tcp           embedded TURN/TLS
 
@@ -155,7 +155,7 @@ Edit `/opt/tsmeet/.env` and set every `change-me` value. These are the productio
 FRONTEND_URL=https://meet.example.com
 MEETING_BASE_URL=https://meet.example.com
 BACKEND_URL=http://backend:3002
-NEXT_PUBLIC_SIGNALING_SERVER=https://api.example.com
+NEXT_PUBLIC_SIGNALING_SERVER=https://meet.example.com
 NEXT_PUBLIC_LIVEKIT_URL=wss://api.example.com/livekit
 LIVEKIT_PUBLIC_URL=wss://api.example.com/livekit
 MINIO_PUBLIC_ENDPOINT=https://api.example.com:9443
@@ -249,8 +249,7 @@ bind_addresses:
 
 rtc:
   tcp_port: 7881
-  port_range_start: 50000
-  port_range_end: 60000
+  udp_port: 7882
   use_external_ip: true
   congestion_control:
     enabled: true
@@ -283,6 +282,8 @@ prometheus_port: 6789
 
 Why TURN/TLS uses `5349`, not `443`: Nginx already owns TCP `443` for the two HTTPS domains on this single IP. Port `5349` is the standard direct TURN/TLS port and uses the same `api.example.com` certificate. Some highly restrictive networks permit only TCP/TLS on port 443; supporting those networks requires a separate public IP, an L4 multiplexer/load balancer, or a third TURN endpoint. Do not map container `5349` to host `443` while Nginx is using it.
 
+The VPS configuration uses LiveKit's UDP mux on host/container UDP `7882`. This sends WebRTC UDP traffic through one published port instead of a large per-track UDP range, avoiding thousands of Docker NAT rules and reducing startup and firewall overhead on small VPS instances.
+
 ## 8. Verify the committed VPS-only Docker override
 
 The repository base Compose file intentionally publishes development ports. Compose normally appends port mappings from layered files, so `ports: []` does not remove the base ports. The committed `/opt/tsmeet/docker-compose.vps.yml` must contain:
@@ -302,9 +303,9 @@ services:
       - "127.0.0.1:7880:7880"
       - "127.0.0.1:6789:6789"
       - "7881:7881/tcp"
+      - "7882:7882/udp"
       - "3478:3478/udp"
       - "5349:5349/tcp"
-      - "50000-60000:50000-60000/udp"
 
   minio:
     ports: !override
@@ -458,9 +459,9 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 9443/tcp
 sudo ufw allow 7881/tcp
+sudo ufw allow 7882/udp
 sudo ufw allow 5349/tcp
 sudo ufw allow 3478/udp
-sudo ufw allow 50000:60000/udp
 sudo ufw --force enable
 sudo ufw status numbered
 ```
@@ -619,7 +620,7 @@ Never run `docker compose down -v` in production; `-v` deletes named data volume
 
 ### Frontend opens but API or Socket.IO fails
 
-- Confirm `NEXT_PUBLIC_SIGNALING_SERVER=https://api.example.com` was present during the frontend build.
+- Confirm `NEXT_PUBLIC_SIGNALING_SERVER=https://meet.example.com` (the frontend domain) was present during the frontend build. The frontend Nginx `/socket.io/` proxy preserves the HttpOnly login cookie.
 - Check `curl https://api.example.com/api/health`.
 - Check Nginx Upgrade/Connection headers and backend logs.
 - Rebuild with `$dc up -d --build frontend` after changing a `NEXT_PUBLIC_*` variable.
@@ -632,7 +633,7 @@ Never run `docker compose down -v` in production; `-v` deletes named data volume
 
 ### Signaling connects but video/audio does not
 
-- Open UDP `50000-60000` and `3478`, plus TCP `7881` and `5349`, in both UFW and the provider firewall.
+- Open UDP `7882` and `3478`, plus TCP `7881` and `5349`, in both UFW and the provider firewall.
 - Confirm `rtc.use_external_ip: true` and the VPS has a directly reachable public IP.
 - Confirm `api.example.com` resolves directly to that IP.
 - Inspect LiveKit logs and browser WebRTC internals.
