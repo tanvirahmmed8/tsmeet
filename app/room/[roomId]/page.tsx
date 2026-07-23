@@ -126,15 +126,11 @@ export default function RoomPage() {
   const roomId = params.roomId as string;
   const autoRecordEnabled = searchParams.get('autoRecord') === '1';
 
-  const [userId, setUserId] = useState(() => {
-    const user = getStoredUser();
-    return String(user?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`));
-  });
-
-  const [userName, setUserName] = useState(() => {
-    const user = getStoredUser();
-    return String(user?.name ?? 'Guest');
-  });
+  // Keep the server render and the browser's first hydration render identical.
+  // Browser-only identity is loaded after mount before media/signaling starts.
+  const [userId, setUserId] = useState('');
+  const [userName, setUserName] = useState('Guest');
+  const [clientIdentityReady, setClientIdentityReady] = useState(false);
 
   const [hideSelf, setHideSelf] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | null>(null); // 'local' | peerId | null
@@ -244,6 +240,19 @@ export default function RoomPage() {
   });
 
   useEffect(() => {
+    const storedUser = getStoredUser();
+    const nextUserId = String(
+      storedUser?.id ??
+      (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`)
+    );
+    const nextUserName = String(storedUser?.name ?? 'Guest');
+    setUserId(nextUserId);
+    setUserName(nextUserName);
+    setDisplayName(nextUserName);
+    setClientIdentityReady(true);
+  }, []);
+
+  useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
@@ -330,6 +339,7 @@ export default function RoomPage() {
   }, [selectedSpeakerId, peers, pinnedId, localStream]);
 
   useEffect(() => {
+    if (!clientIdentityReady || !userId) return;
     const storedUser = getStoredUser();
     const guestName = typeof window !== 'undefined' ? localStorage.getItem('guestName') : null;
 
@@ -361,7 +371,7 @@ export default function RoomPage() {
     };
 
     loadRoom();
-  }, [roomId, userId, displayName, guestSessionReady]);
+  }, [roomId, userId, displayName, guestSessionReady, clientIdentityReady]);
 
   useEffect(() => {
     if (joinInitiated) return;
