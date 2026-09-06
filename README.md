@@ -1,466 +1,143 @@
 # TSMeet
 
-**Video meetings, scheduling, API access, and server-managed recording**
+Self-hosted video meetings with a Zoom/Google Meet-style interface, waiting-room admission, LiveKit SFU media, scheduling, chat, moderation, and optional server-side recording.
 
-Build with Next.js, Node.js, MySQL, Redis, Socket.IO, and a self-hosted LiveKit SFU. Supports meetings, calendars, booking flows, API docs, LiveKit Egress composite recording, and private MinIO storage.
+TSMeet runs under your control: you provide the VPS, domains, TLS certificates, and optional infrastructure.
 
-![Node](https://img.shields.io/badge/Node-18%2B-green.svg)
-![React](https://img.shields.io/badge/React-19.2-blue.svg)
-![MySQL](https://img.shields.io/badge/MySQL-8%2B-4479A1.svg)
+## Features
 
----
+- Next.js frontend (`3001`) and Express/Socket.IO backend (`3002`)
+- LiveKit SFU audio, video, screen sharing, simulcast, and adaptive subscriptions
+- MySQL users, rooms, roles, waiting rooms, calendars, and bookings
+- Redis coordination for Socket.IO and LiveKit/Egress
+- Host moderation: admit/deny, mute, stop video, remove, co-host, lock, transfer host, and end meeting
+- Hand raise, chat, device selection, low-data mode, and network-aware video quality
+- Room-scoped guest sessions using short-lived HttpOnly cookies
+- Optional LiveKit Egress + private MinIO recording
+- Optional Prometheus/Grafana/Loki observability profiles
 
-## 🎯 Key Features
+## Architecture
 
-- ✅ **1-to-1 & Small Group Video Calls** - WebRTC mesh rooms capped by `MAX_MESH_PARTICIPANTS` (default: 8)
-- ✅ **HD Audio & Video** - Up to 1080p with adaptive bitrate
-- ✅ **Screen Sharing** - Share your screen with zero latency
-- ✅ **Text Chat** - Real-time messaging during meetings
-- ✅ **Media Controls** - Mute/unmute, camera on/off
-- ✅ **Meeting Links** - Invite via shareable link (no accounts needed for guests)
-- ✅ **Secure** - End-to-end encryption ready, self-hosted
-- ✅ **Archive Recording** - Recorder worker and recording session management
+LiveKit is the default media provider. Browsers publish tracks to the LiveKit SFU and subscribe only to tracks/layers needed by the layout and network conditions. Socket.IO carries application signaling and moderation events; it is not the video transport.
 
----
+Production browser REST requests use same-origin Next.js proxy routes so the `tsmeet_session` cookie reaches the backend. Production VPS media uses LiveKit UDP mux on `7882/udp` with TCP fallback on `7881`, avoiding a large WebRTC UDP range and thousands of Docker NAT rules.
 
-## 🚀 Quick Start
+See [ARCHITECTURE.md](./ARCHITECTURE.md), [docs/adr/0001-self-hosted-livekit-sfu.md](./docs/adr/0001-self-hosted-livekit-sfu.md), and [docs/PRODUCTION_NETWORKING.md](./docs/PRODUCTION_NETWORKING.md).
 
-### Prerequisites
-- Node.js 18+
-- MySQL 8+ (or compatible MariaDB)
-- Git
+## Quick start with Docker
 
-### Installation
+Prerequisite: Docker Desktop or Docker Engine with the Compose plugin.
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/tanvirahmmed8/tsmeet.git
 cd tsmeet
+copy .env.example .env        # PowerShell; use cp on Linux/macOS
+# Edit .env and replace every change-me value.
+docker compose up -d --build
+```
 
-# 2. Install dependencies
-npm install
+Open <http://localhost:3001>.
 
-# 3. Setup environment
-cp .env.example .env.local
-# Edit .env.local with your configuration
+| Service | Purpose | Endpoint |
+|---|---|---|
+| frontend | Next.js application | `http://localhost:3001` |
+| backend | REST API and Socket.IO | `http://localhost:3002` |
+| mysql | Application database | `127.0.0.1:13306` by default |
+| redis | Coordination/cache | internal by default |
+| livekit | SFU/local media | `ws://localhost:7880` |
 
-# 4. Start frontend (http://localhost:3001)
-npm run dev
+```bash
+docker compose ps
+docker compose logs -f frontend backend livekit
+```
 
-# 5. In another terminal, start backend
+## Local development without Docker
+
+Run MySQL, Redis, and LiveKit with Docker, then run the two application processes separately:
+
+```bash
+pnpm install
+pnpm dev                         # frontend: http://localhost:3001
+
 cd server
-npm install
-npm run dev
-# Runs on http://localhost:3002
-
-# 6. Create MySQL database
-# mysql -u root -p
-# CREATE DATABASE videoconference;
-
-# 7. Open browser and visit http://localhost:3001
+pnpm install
+npm run dev                      # backend: http://localhost:3002
 ```
 
-**Test Credentials:**
-- Email: `demo@example.com`
-- Password: `demo123456`
+The backend initializes the MySQL schema on startup.
 
----
+## Production deployment
 
-## 📚 Documentation
+Follow [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) for the two-domain VPS setup:
 
-- **[Setup Guide](./SETUP_GUIDE.md)** - Detailed installation for production
-- **[API Documentation](./API.md)** - Backend REST + realtime contracts
-
----
-
-## 🏗️ Architecture Overview
-
-```
-User Browser (React)
-    ↓ WebRTC + Socket.IO
-Signaling Server (Node.js/Express)
-    ↓ HTTPS/REST
-MySQL Database
-    ↓
-Coturn STUN/TURN Server
+```text
+meet.example.com      -> Nginx -> frontend:3001
+api.example.com       -> Nginx -> backend:3002 and LiveKit:7880
+public VPS UDP 7882   -> LiveKit UDP mux
+public VPS TCP 7881   -> LiveKit ICE/TCP fallback
+api.example.com:3478 -> embedded TURN/UDP (optional)
+api.example.com:5349 -> embedded TURN/TLS (optional)
 ```
 
-### Realtime Signaling Flow (Summary)
-1. User requests to join room over Socket.IO.
-2. Host approval flow controls waiting room access.
-3. Peers exchange WebRTC offer/answer and ICE candidates through signaling server.
-4. Media streams are sent peer-to-peer once connection is established.
-
-### Security Model (Summary)
-- JWT authentication for protected REST endpoints.
-- Socket auth supports JWT from handshake.
-- Prepared SQL queries via parameterized execution.
-- CORS restricted by `FRONTEND_URL`.
-- Use HTTPS/WSS in production.
-
-### Core Components
-
-**Frontend (Next.js + React)**
-- Landing page with feature showcase
-- User authentication (registration/login)
-- Dashboard for managing meetings
-- Full-featured video call interface
-- Modern responsive UI with Tailwind CSS
-
-**Backend (Node.js + Express)**
-- WebSocket signaling for WebRTC
-- REST API for auth and room management
-- MySQL integration
-- JWT-based authentication
-- Real-time participant tracking
-
-**Database (MySQL)**
-- User accounts and authentication
-- Meeting rooms and history
-- Chat messages
-- Participant tracking
-
-**Infrastructure**
-- Self-hosted Coturn for STUN/TURN
-- No cloud APIs or external dependencies
-- Docker deployment ready
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Technology | Why |
-|-----------|-----------|-----|
-| Frontend | React 19 + Next.js 16 | Modern, performant, full-stack |
-| Backend | Node.js + Express | Fast, event-driven architecture |
-| Real-time | WebRTC + Socket.IO | P2P connections, low latency |
-| Database | MySQL | Reliable, scalable, and easy to operate |
-| Auth | JWT + bcryptjs | Stateless, secure sessions |
-| Styling | Tailwind CSS v4 | Utility-first, responsive design |
-| UI Components | shadcn/ui | Beautiful, accessible components |
-| NAT Traversal | Coturn | Self-hosted STUN/TURN server |
-
-**All 100% free and open source.**
-
----
-
-## 📊 Performance Targets
-
-| Metric | Target | Notes |
-|--------|--------|-------|
-| Connection Time | < 2 seconds | WebRTC peer setup |
-| Video Latency | < 100ms | End-to-end delay |
-| Chat Latency | < 50ms | Message delivery |
-| Max Participants | 8 by default | WebRTC mesh; use an SFU for larger rooms |
-| Bandwidth | 2.5-4 Mbps | For HD video per user |
-| CPU Usage | < 30% | Per signaling server |
-
----
-
-## 🔒 Security
-
-### Built-in Security
-- **JWT Authentication** - Stateless, time-limited tokens
-- **Password Hashing** - bcryptjs with salt rounds
-- **DTLS-SRTP** - Encrypted media streams via WebRTC
-- **Database Protection** - Prepared statements prevent SQL injection
-- **CORS** - Restricted to authorized origins
-- **HTTPS/WSS** - Encrypted in transit
-
-### Future Improvements
-- End-to-end encryption (Noise protocol)
-- Two-factor authentication
-- Activity audit logging
-- Rate limiting
-- DDoS protection
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md#security-considerations) for details.
-
----
-
-## 💰 Cost Analysis
-
-| Service | TSMeet | Zoom | Twilio | Daily.co |
-|---------|-------------|------|--------|----------|
-| 1-to-1 Calls | Free | Free (up to 40 min) | $0.01-0.05/min | $0.10-0.20/min |
-| Group Calls | Free | $15.99/mo | $0.02-0.04/min | $0.25-0.50/min |
-| Screen Share | Free | Free | Included | Included |
-| Recording | Free* | $15.99/mo | Paid | Paid |
-| **Annual Cost** | **$0** | **$192-240** | **$100-500** | **$300-1000** |
-
-*Recording requires self-hosted FFmpeg setup
-
----
-
-## 🚢 Deployment
-
-### Development
-```bash
-npm run dev          # Frontend
-cd server && npm run dev  # Backend
-```
-
-### Production
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed steps.
-
-Quick version:
-```bash
-# Run frontend and backend
-# frontend: 127.0.0.1:3000
-# backend(api+socket): 127.0.0.1:3001
-
-# Configure two domains in Nginx:
-# app.yourdomain.com -> 127.0.0.1:3000
-# api.yourdomain.com -> 127.0.0.1:3001
-
-# Issue SSL certs
-certbot certonly --standalone -d app.yourdomain.com
-certbot certonly --standalone -d api.yourdomain.com
-```
-
-Nginx reverse proxy example:
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name app.yourdomain.com;
-  ssl_certificate /etc/letsencrypt/live/app.yourdomain.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/app.yourdomain.com/privkey.pem;
-  location / { proxy_pass http://127.0.0.1:3000; }
-}
-
-server {
-  listen 443 ssl http2;
-  server_name api.yourdomain.com;
-  ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
-  location / {
-    proxy_pass http://127.0.0.1:3002;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-  }
-}
-```
-
-Environment values for this setup:
 ```env
-# frontend .env.local
-NEXT_PUBLIC_SIGNALING_SERVER=https://api.yourdomain.com
-BACKEND_URL=https://api.yourdomain.com
-
-# backend server/.env
-FRONTEND_URL=https://app.yourdomain.com
-BACKEND_URL=http://127.0.0.1:3002
-PORT=3002
+FRONTEND_URL=https://meet.example.com
+MEETING_BASE_URL=https://meet.example.com
+BACKEND_URL=http://backend:3002
+NEXT_PUBLIC_SIGNALING_SERVER=https://meet.example.com
+NEXT_PUBLIC_LIVEKIT_URL=wss://api.example.com/livekit
+LIVEKIT_PUBLIC_URL=wss://api.example.com/livekit
 ```
 
-### Docker Compose
-```bash
-docker-compose up -d
-# Frontend: http://localhost:3001
-# Backend: http://localhost:3002
-# Database: mysql://localhost:3306/videoconference
-```
+`NEXT_PUBLIC_SIGNALING_SERVER` must be the frontend origin so the host-scoped cookie authenticates Socket.IO through Nginx. Never expose `JWT_SECRET` to the browser or store JWTs in localStorage.
 
----
-
-## 📖 Usage Guide
-
-### For Users
-1. Visit your TSMeet deployment
-2. Sign up with email and password
-3. Create a new meeting or join an existing one
-4. Share the link with participants
-5. Enable camera/microphone and start talking
-
-### For Developers
-Quick reference:
-- Add routes in `server/routes/*` and mount in `server/index.ts`.
-- Database bootstraps automatically from `server/db.ts` on backend start.
-- Frontend calls backend via Next API proxy routes in `app/api/*`.
-- LiveKit media/session behavior is centered in `hooks/useLiveKitRoom.ts` and `app/room/[roomId]/page.tsx`; Socket.IO remains responsible for application events and moderation.
-- Main APIs: auth, rooms, calendars, bookings, public calendars.
-
-### For System Administrators
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for:
-- Step-by-step installation
-- MySQL setup
-- Coturn configuration
-- SSL/TLS certificates
-- Docker deployment
-- Troubleshooting
-
----
-
-## 🧪 Developer Commands
+After frontend code or `NEXT_PUBLIC_*` changes, rebuild `frontend`. After LiveKit YAML or port changes, recreate `livekit`. Never use `down -v` or delete database volumes.
 
 ```bash
-# Frontend
-npm run dev
-npm run build
-npm run lint
-
-# Backend
-cd server
-npm run dev
-npm run start
+./deploy/configure-app.sh
+./deploy/verify-production-config.sh
+./deploy/dc up -d --build frontend
+./deploy/dc up -d --force-recreate livekit
 ```
 
-## ⚙️ Environment
+Recording and observability are optional profiles; see [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md).
 
-Frontend `.env.local`:
-```env
-NEXT_PUBLIC_SIGNALING_SERVER=https://api.yourdomain.com
-BACKEND_URL=https://api.yourdomain.com
-```
+## Environment and limits
 
-Backend `server/.env`:
-```env
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=videoconference
-JWT_SECRET=change-this
-FRONTEND_URL=https://app.yourdomain.com
-BACKEND_URL=http://127.0.0.1:3002
-PORT=3002
-NODE_ENV=production
-RECORDER_SERVICE_TOKEN=change-this-too
-RECORDER_POLL_INTERVAL_MS=4000
-RECORDER_SERVICE_INSTANCE_ID=tsmeet-recorder-1
-```
+Copy [.env.example](./.env.example) to `.env`. Never commit `.env`, production LiveKit YAML, credentials, or TLS private keys.
 
----
+- `MAX_PARTICIPANTS=50` — application and LiveKit room limit
+- `MAX_MESH_PARTICIPANTS=8` — legacy mesh fallback only
+- `MEDIA_PROVIDER=livekit` — scalable default
+- `REDIS_PASSWORD` — required and non-empty in production
+- `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and matching `LIVEKIT_KEYS`
 
-## 🤝 Contributing
-
-We welcome contributions! Whether it's features, bug fixes, documentation, or translations.
-
-### Getting Started
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow the existing code style
-- Add tests for new features
-- Update documentation
-- Keep commits atomic and descriptive
-
----
-
-## 🗺️ Roadmap
-
-### Phase 1 ✅ Complete
-- [x] Core WebRTC infrastructure
-- [x] User authentication
-- [x] Video call interface
-- [x] Chat functionality
-- [x] Room management
-
-### Phase 2 🚧 In Progress
-- [x] Complete WebRTC peer connections for small mesh rooms
-- [ ] Audio/video codec selection
-- [ ] Bandwidth adaptation
-- [ ] Recording support
-
-### Phase 3 📋 Planned
-- [ ] Advanced features (screen share, virtual backgrounds)
-- [ ] Mobile app (React Native)
-- [ ] AI transcription
-- [ ] Meeting scheduling
-- [ ] Analytics dashboard
-
-See [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) for full roadmap.
-
----
-
-## 📞 Support
-
-- **Documentation** - Use the repository docs in this project
-- **GitHub Issues** - Replace with your repository issue tracker if needed
-- **Discord** - Replace with your team or community link if needed
-- **Email** - Replace with your support address
-
----
-
-## 📜 License
-
-TSMeet is provided as a self-hosted application and API platform.
-
-See [LICENSE](./LICENSE) file for details.
-
----
-
-## 👥 Community
-
-- **GitHub Stars** - Give us a star if you like this project ⭐
-- **Contribute** - Improve TSMeet for your deployment or product stack
-- **Operate** - Run frontend, backend, and recorder worker separately
-
----
-
-## 🎓 Learning Resources
-
-### WebRTC
-- [WebRTC Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API)
-- [WebRTC Academy](https://webrtcacademy.com/)
-- [Interactive WebRTC Samples](https://webrtc.github.io/samples/)
-
-### Socket.IO
-- [Socket.IO Documentation](https://socket.io/docs/)
-- [Socket.IO Tutorial](https://socket.io/get-started/chat/)
-
-### React & Next.js
-- [React Documentation](https://react.dev)
-- [Next.js Documentation](https://nextjs.org/docs)
-
-### MySQL
-- [MySQL Documentation](https://dev.mysql.com/doc/)
-- [MySQL Tutorial](https://www.mysqltutorial.org/)
-
----
-
-## 🙏 Acknowledgments
-
-Built with inspiration from:
-- [Zoom](https://zoom.us/) - for the user experience
-- [Jitsi Meet](https://jitsi.org/jitsi-meet/) - product inspiration
-- [WebRTC community](https://webrtc.org/) - enabling peer-to-peer communication
-
----
-
-## 📈 Status
-
-- **Latest Release**: v1.0.0-alpha
-- **Status**: Active Development
-- **Last Updated**: January 29, 2026
-- **Node**: v18+
-- **React**: v19.2+
-
----
-
-## 🎉 Get Started Now
+## Developer commands
 
 ```bash
-# Clone the repository
-git clone https://github.com/tanvirahmmed8/tsmeet.git
-cd tsmeet
-
-# Follow the Quick Start guide above
-npm install
-npm run dev
-
-# Visit http://localhost:3001
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+docker compose down                 # preserves named volumes
 ```
 
-**Use the frontend, backend, and recorder worker together for full functionality.**
+## Documentation
 
----
+- [SETUP_GUIDE.md](./SETUP_GUIDE.md) — setup and operations
+- [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) — production VPS, Nginx, TLS, firewall, and deployment
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — components and data flow
+- [API.md](./API.md) — REST and realtime API contracts
+- [FEATURES.md](./FEATURES.md) — implemented feature inventory
+- [docs/PRODUCTION_NETWORKING.md](./docs/PRODUCTION_NETWORKING.md) — public/private ports
+- [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md) — recording and observability
+- [docs/OPERATIONS_HANDBOOK.md](./docs/OPERATIONS_HANDBOOK.md) — operations and backups
+- [docs/CAPACITY_AND_SCALING.md](./docs/CAPACITY_AND_SCALING.md) — capacity guidance
 
-**TSMeet**
+Additional references:
 
-*Meetings, scheduling, API access, and recording in one stack*
+- [docs/STORAGE_BACKUP_AND_RESTORE.md](./docs/STORAGE_BACKUP_AND_RESTORE.md) - recording backup and restore drills
+- [post as project details for my portfolio website.md](./post%20as%20project%20details%20for%20my%20portfolio%20website.md) - portfolio-ready project summary
+
+## License
+
+See [LICENSE.md](./LICENSE.md).
