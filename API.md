@@ -5,8 +5,8 @@ Canonical source for backend HTTP + realtime contracts in this repo.
 Base backend URL (local): `http://localhost:3002`
 
 Auth:
-- Protected endpoints require `Authorization: Bearer <jwt>`
-- JWT is issued by `/api/auth/register` and `/api/auth/login`
+- Browser requests use the HttpOnly `tsmeet_session` cookie created by the same-origin Next.js auth route.
+- Protected backend integrations may use `Authorization: Bearer <jwt>`.
 
 ---
 
@@ -459,7 +459,7 @@ Response `201`:
     "assigned_user_email": "alex@example.com",
     "status": "confirmed"
   },
-  "meetingUrl": "http://localhost:3000/meetings/<bookingId>",
+  "meetingUrl": "http://localhost:3001/meetings/<bookingId>",
   "confirmationMessage": "...",
   "reminders": [{ "minutesBefore": 10, "remindAt": "..." }]
 }
@@ -515,7 +515,7 @@ Response includes calendar recording/type hints:
     "slotStartAt": "2026-06-03T04:00:00.000Z",
     "slotEndAt": "2026-06-03T04:30:00.000Z",
     "bookerName": "Alice",
-    "meetingUrl": "http://localhost:3000/meetings/<bookingId>"
+    "meetingUrl": "http://localhost:3001/meetings/<bookingId>"
   },
   "calendar": {
     "id": "uuid",
