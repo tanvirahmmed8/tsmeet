@@ -1,0 +1,97 @@
+name: Bug report
+description: Something in TSMeet does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        **Do not report security vulnerabilities here** — follow
+        [SECURITY.md](../blob/main/SECURITY.md) instead.
+
+        Never paste real secrets: `JWT_SECRET`, LiveKit keys, Redis or MinIO
+        credentials, session cookies, or production URLs containing tokens.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a room as host
+        2. Join from a second browser profile
+        3. Admit the guest
+        4. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Meeting room / media
+        - Waiting room / moderation
+        - Chat / presence
+        - Recording
+        - Calendars and booking
+        - Auth and accounts
+        - Dashboard / UI
+        - Docker or deployment
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-running
+    attributes:
+      label: How are you running TSMeet?
+      options:
+        - Docker Compose (default local stack)
+        - Local dev (pnpm dev + pnpm run dev)
+        - VPS production deployment
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Version / commit
+      placeholder: "output of: git rev-parse --short HEAD"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS
+      placeholder: "Chrome 140 on Windows 11 / Firefox 133 on Ubuntu 24.04"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Browser console errors, and `docker compose logs backend livekit` where
+        applicable. Redact every secret first.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for a duplicate
+          required: true
+        - label: I removed all secrets and credentials from this report
+          required: true

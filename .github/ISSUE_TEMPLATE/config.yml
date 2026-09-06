@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/tanvirahmmed8/tsmeet/security/advisories/new
+    about: Do not open a public issue. Report privately via a security advisory.
+  - name: Setup and deployment help
+    url: https://github.com/tanvirahmmed8/tsmeet/blob/main/SETUP_GUIDE.md
+    about: Check the setup guide, VPS deployment guide, and operations handbook first.

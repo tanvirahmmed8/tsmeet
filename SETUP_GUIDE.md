@@ -101,6 +101,11 @@ provider is only for controlled small-room rollback tests and is limited by
 `MAX_MESH_PARTICIPANTS` (8 by default). Normal rooms use `MAX_PARTICIPANTS`
 (50 by default).
 
+> `MAX_PARTICIPANTS=50` is a configured ceiling, not a tested guarantee. The
+> verified figure on the 8-vCPU reference node is **20 participants**; the
+> 50-participant attempt failed there. Size real deployments from
+> [docs/CAPACITY_AND_SCALING.md](./docs/CAPACITY_AND_SCALING.md).
+
 ## Testing checklist
 
 ```bash
@@ -136,9 +141,13 @@ volumes during deployment.
 
 ## Related documentation
 
+- [docs/README.md](./docs/README.md) — documentation index for every audience
 - [README.md](./README.md) — project overview and quick start
+- [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) — using meetings, moderation, recording, booking
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — component and media architecture
 - [API.md](./API.md) — REST, proxy, and realtime contracts
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — branching, testing, and review rules
+- [SECURITY.md](./SECURITY.md) — vulnerability reporting and deployment requirements
 - [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) — production deployment
 - [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md) — recording/observability
 - [docs/OPERATIONS_HANDBOOK.md](./docs/OPERATIONS_HANDBOOK.md) — operations and rollback

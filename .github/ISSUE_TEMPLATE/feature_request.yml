@@ -1,0 +1,62 @@
+name: Feature request
+description: Suggest a capability TSMeet does not have yet
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [FEATURES.md](../blob/main/FEATURES.md) first — it lists
+        what is implemented and what is explicitly not.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you are in, not just the feature you want.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including workarounds you are using today.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Meeting room / media
+        - Waiting room / moderation
+        - Recording
+        - Calendars and booking
+        - Auth and accounts
+        - Dashboard / UI
+        - Deployment and operations
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
+      description: |
+        TSMeet is self-hosted by design. Proposals that require a paid
+        communications API (LiveKit Cloud, Twilio, Agora, Daily) will not be
+        accepted — see
+        [ADR 0001](../blob/main/docs/adr/0001-self-hosted-livekit-sfu.md).
+      options:
+        - label: This can be built without a managed communications API
+          required: true
+        - label: I checked FEATURES.md and this is not already implemented
+          required: true

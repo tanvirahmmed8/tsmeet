@@ -1,347 +1,436 @@
-# API Documentation (Fully Updated)
+# TSMeet API Reference
 
-Canonical source for backend HTTP + realtime contracts in this repo.
+Contracts for the TSMeet backend: REST endpoints, the Next.js same-origin proxy,
+and the Socket.IO realtime protocol.
 
-Base backend URL (local): `http://localhost:3002`
+> **Scope.** This file documents what the code actually implements. Every route
+> below is mounted in [`server/index.ts`](server/index.ts); every socket event is
+> handled there too. If a behaviour is not listed here, treat it as unsupported.
 
-Auth:
-- Browser requests use the HttpOnly `tsmeet_session` cookie created by the same-origin Next.js auth route.
-- Protected backend integrations may use `Authorization: Bearer <jwt>`.
+**Contents**
+
+| Section | What it covers |
+|---|---|
+| [Base URLs and transports](#base-urls-and-transports) | Which port serves what |
+| [Authentication](#authentication) | Cookie sessions, bearer tokens, guests |
+| [Request and error conventions](#request-and-error-conventions) | Status codes, error body shape |
+| [Auth API](#auth-api) | Register, login, guest, verify |
+| [Rooms API](#rooms-api) | Create, read, list, end meetings |
+| [Media token API](#media-token-api) | The LiveKit join credential |
+| [Recording API](#recording-api) | Host session lifecycle and archive |
+| [Calendars API](#calendars-api) | Availability, slots, bookings |
+| [Public booking API](#public-booking-api) | Unauthenticated share/embed pages |
+| [Webhooks and operations](#webhooks-and-operations) | LiveKit webhook, health, metrics |
+| [Socket.IO realtime contract](#socketio-realtime-contract) | Every client and server event |
+| [Next.js proxy layer](#nextjs-proxy-layer) | How the browser really calls the API |
 
 ---
 
-## Feature Support Matrix
+## Base URLs and transports
 
-- User auth (register/login/verify): `REST backend`
-- Rooms CRUD (create/list/get/end): `REST backend`
-- Realtime room join/moderation/signaling: `Socket.IO backend`
-- Calendars + slots + bookings: `REST backend`
-- Calendar types (`personal`, `event`, `round_robin`): `REST backend`
-- Calendar auto-record prompt flag (`settings.autoRecordMeeting`): `REST backend` (controls room-start prompt behavior)
-- Round-robin assignee resolution (id/email + per-member availability): `REST backend`
-- Meeting recording controls (host start/pause/resume/stop): `REST backend session manager`
-- Hidden recorder worker orchestration: `REST backend + Socket.IO hidden participant`
-- Screen share with optional device audio: `Frontend media capture + WebRTC track replace`
+| Transport | Local URL | Purpose |
+|---|---|---|
+| Next.js frontend + `/api` proxy | `http://localhost:3001` | Everything the browser calls |
+| Express REST + Socket.IO | `http://localhost:3002` | Backend origin, integrations |
+| LiveKit SFU | `ws://localhost:7880` | WebRTC media only |
+
+The browser never calls port 3002 directly. It calls same-origin `/api/*` routes
+on the Next.js server, which forward to Express with the session cookie attached.
+Server-to-server integrations may call Express directly with a bearer token.
 
 ---
 
-## REST API
+## Authentication
 
-### Health
+TSMeet accepts three credential forms, checked in this order on the socket
+handshake and honoured by [`server/middleware/auth.ts`](server/middleware/auth.ts):
 
-### GET `/api/health`
-Response `200`:
+1. **`tsmeet_session` cookie** — HttpOnly, set by the Next.js auth routes. This is
+   what browsers use. It is never readable from JavaScript.
+2. **`Authorization: Bearer <jwt>`** — for server-side integrations and scripts.
+3. **Socket handshake `auth.token`** — used by the legacy mesh client only.
+
+JWT payloads carry `userId`, `email`, `name`, and, for guests, `guest: true` and
+the `roomId` the token is bound to. Account tokens expire in **7 days**; guest
+tokens in **12 hours**.
+
+> **Guest tokens are room-scoped.** A guest JWT minted for room A is rejected by
+> `POST /api/media/token` and by `request-join` for room B.
+
+---
+
+## Request and error conventions
+
+Request bodies are JSON and capped at **256 KB**. Rate limits:
+
+| Path prefix | Window | Limit |
+|---|---|---|
+| `/api/auth` | 15 minutes | 30 requests |
+| `/api/public` | 1 minute | 120 requests |
+
+Errors always use this shape:
+
 ```json
-{ "status": "ok", "timestamp": "2026-06-02T12:00:00.000Z" }
+{ "error": "Human readable message" }
 ```
 
+Some errors add a machine-readable `code`:
+
+| Status | Meaning | Notable `code` values |
+|---|---|---|
+| `400` | Invalid input or missing consent | — |
+| `401` | Missing or invalid credentials | — |
+| `403` | Authenticated but not permitted | — |
+| `404` | Not found | — |
+| `409` | Conflict | `MEDIA_PROVIDER_MESH` |
+| `410` | Meeting already ended | — |
+| `507` | Storage quota exhausted | `RECORDING_STORAGE_FULL` |
+
 ---
 
-### Auth
+## Auth API
 
-### POST `/api/auth/register`
-Body:
+Mounted at `/api/auth`. Public.
+
+### `POST /api/auth/register`
+
+Validated with Zod: email is trimmed, lower-cased, max 191 chars; password is
+8–128 chars; name is 1–191 chars.
+
 ```json
-{ "email": "user@example.com", "password": "secret123", "name": "User" }
+{ "email": "user@example.com", "password": "secret1234", "name": "User" }
 ```
-Response `201`:
+
+`201`:
+
 ```json
 {
-  "token": "<jwt>",
+  "token": "<jwt, 7d>",
   "user": { "id": 1, "email": "user@example.com", "name": "User" }
 }
 ```
 
-### POST `/api/auth/login`
-Body:
+`400` if the payload is invalid **or** the email already exists.
+
+### `POST /api/auth/login`
+
 ```json
-{ "email": "user@example.com", "password": "secret123" }
+{ "email": "user@example.com", "password": "secret1234" }
 ```
-Response `200`:
+
+`200` returns the same `{ token, user }` shape. `401` on bad credentials — the
+message is identical for unknown email and wrong password, by design.
+
+### `POST /api/auth/guest`
+
+Creates a short-lived identity so someone can join a meeting from a shared link
+without an account. A real `users` row is inserted so meeting foreign keys and
+audit records stay valid.
+
+```json
+{ "roomId": "<uuid>", "name": "Alice" }
+```
+
+`201`:
+
 ```json
 {
-  "token": "<jwt>",
-  "user": { "id": 1, "email": "user@example.com", "name": "User" }
+  "token": "<jwt, 12h, bound to roomId>",
+  "user": { "id": 42, "name": "Alice", "guest": true }
 }
 ```
 
-### GET `/api/auth/verify`
-Headers:
-- `Authorization: Bearer <jwt>`
+| Status | Cause |
+|---|---|
+| `400` | `roomId` is not a UUID, or name is empty / over 100 chars |
+| `404` | Room does not exist |
+| `410` | Meeting has already ended |
 
-Response `200`:
+### `GET /api/auth/verify`
+
+Requires `Authorization: Bearer <jwt>`. Returns `200` with the decoded payload,
+`401` when no token is supplied, `403` when it is invalid or expired.
+
 ```json
 { "valid": true, "user": { "userId": 1, "email": "user@example.com", "name": "User", "iat": 0, "exp": 0 } }
 ```
 
 ---
 
-### Rooms (Protected)
+## Rooms API
 
-### POST `/api/rooms`
-Create meeting room.
+Mounted at `/api/rooms`. **All routes require authentication.**
 
-Body:
+### `POST /api/rooms`
+
+Creates the durable room row *and* the LiveKit room. If LiveKit rejects the
+create, the database row is rolled back so you never get an unusable meeting.
+
 ```json
-{ "title": "Team sync", "description": "Weekly call" }
+{ "title": "Team sync", "description": "Weekly call", "password": "optional" }
 ```
 
-Response `201`:
+A non-empty `password` is bcrypt-hashed and enforced later at socket join time,
+not here. `201`:
+
 ```json
 {
-  "id": "uuid",
+  "id": "<uuid>",
   "title": "Team sync",
   "description": "Weekly call",
   "creator_id": 1,
-  "created_at": "...",
+  "created_at": "2026-06-02T12:00:00.000Z",
   "ended_at": null
 }
 ```
 
-### GET `/api/rooms/user/rooms`
-List rooms created by authenticated user.
+### `GET /api/rooms/:roomId`
 
-### GET `/api/rooms/:roomId`
-Get room metadata.
+Returns the room row plus the resolved media provider for that room:
 
-### POST `/api/rooms/:roomId/end`
-End room (creator only).
+```json
+{ "id": "<uuid>", "title": "Team sync", "creator_id": 1, "ended_at": null, "media_provider": "livekit" }
+```
 
-Response `200`:
+`media_provider` is `livekit` or `mesh`, decided by
+[`server/services/mediaProvider.ts`](server/services/mediaProvider.ts) from the
+`MEDIA_PROVIDER_MESH_ROOMS` / `MEDIA_PROVIDER_LIVEKIT_ROOMS` allow-lists.
+
+### `GET /api/rooms/user/rooms`
+
+Rooms created by the authenticated user, newest first.
+
+### `POST /api/rooms/:roomId/end`
+
+Creator only. Deletes the LiveKit room — which disconnects every participant's
+media immediately — then stamps `ended_at`. `403` for non-creators.
+
 ```json
 { "message": "Room ended successfully" }
 ```
 
 ---
 
-### Recording Sessions (Protected Host API)
+## Media token API
 
-Recording is now modeled as a backend session lifecycle. The web client only controls the session. A separate recorder worker is expected to claim the session and join the room as a hidden participant.
+### `POST /api/media/token`
 
-Session statuses:
-- `awaiting_recorder`
-- `recording`
-- `paused`
-- `stopping`
-- `completed`
-- `failed`
+The most important endpoint in the product: it exchanges a TSMeet session for a
+short-lived LiveKit join credential. Requires authentication.
 
-### GET `/api/recordings/rooms/:roomId/active`
-Returns the active recording session for a room owned by the authenticated user.
+```json
+{ "roomId": "<uuid>", "displayName": "Alice" }
+```
 
-Response `200`:
+`200`:
+
 ```json
 {
-  "session": {
-    "id": "uuid",
-    "roomId": "uuid",
-    "creatorId": "1",
-    "startedByUserId": "1",
-    "status": "awaiting_recorder",
-    "hiddenRecorderSocketId": null,
-    "recorderServiceInstanceId": null,
-    "startedAt": "2026-06-03T12:00:00.000Z",
-    "updatedAt": "2026-06-03T12:00:00.000Z",
-    "completedAt": null,
-    "lastHeartbeatAt": null,
-    "failureReason": null
-  }
+  "token": "<livekit jwt, 5 minute ttl>",
+  "url": "wss://media.example.com",
+  "room": "tsmeet-<roomId>",
+  "identity": "user:42",
+  "role": "guest",
+  "provider": "livekit"
 }
 ```
 
-### GET `/api/recordings/sessions/:sessionId`
-Returns a single session if the authenticated user owns the room.
+**Authorisation rules, all enforced server-side:**
 
-### POST `/api/recordings/sessions/start`
-Body:
-```json
-{ "roomId": "uuid" }
+- The room creator is always `host`.
+- A `meeting_roles` row of `co-host` grants `co-host`.
+- Everyone else must have an `approved` row in `meeting_waiting_participants`,
+  otherwise `403 Waiting-room approval is required`.
+- Client-supplied role or grant fields are **ignored**. Privileges are derived
+  only from trusted database state.
+- A guest token bound to a different room gets `403`.
+
+`role` maps to LiveKit grants like this:
+
+| Role | `canPublish` | `roomAdmin` | `hidden` |
+|---|---|---|---|
+| `host` | yes | yes | no |
+| `co-host` | yes | yes | no |
+| `guest` | yes | no | no |
+| `recorder` | no | no | yes |
+
+| Status | Cause |
+|---|---|
+| `400` | Missing `roomId`/`displayName`, or name over 100 chars |
+| `403` | No waiting-room approval, or guest token for another room |
+| `404` | Room not found |
+| `409` | Room is assigned to the mesh provider (`code: MEDIA_PROVIDER_MESH`) |
+| `410` | Meeting has ended |
+
+The token TTL is five minutes; it authorises the *join*, not the whole meeting.
+LiveKit reclaims empty rooms after `empty_timeout` (300s), so this endpoint
+recreates the room only after the participant has been authorised.
+
+---
+
+## Recording API
+
+Mounted at `/api/recordings`. **All routes require authentication and room
+ownership.** Recording is performed by **LiveKit Egress**, which composites the
+room server-side and writes to the private MinIO bucket. No browser and no hidden
+participant performs the capture.
+
+### Session lifecycle
+
+```text
+                 start                stop
+  (none) ──────────────► recording ──────────► completed
+                            │  ▲
+                      pause │  │ resume
+                            ▼  │
+                          paused
 ```
 
-Response `201`:
+Each `start` and each `resume` opens a **new Egress segment**; each `pause` and
+`stop` closes the current one. A recording is therefore one archive row with one
+or more `recording_segments`.
+
+Session statuses: `awaiting_recorder`, `recording`, `paused`, `stopping`,
+`completed`, `failed`.
+
+### `POST /api/recordings/sessions/start`
+
+```json
+{ "roomId": "<uuid>", "consentConfirmed": true }
+```
+
+`consentConfirmed: true` is **mandatory** — omitting it returns `400`. The call
+also checks the owner's storage quota before starting.
+
+`201` returns the session object:
+
 ```json
 {
-  "id": "uuid",
-  "roomId": "uuid",
+  "id": "<uuid>",
+  "roomId": "<uuid>",
   "creatorId": "1",
   "startedByUserId": "1",
-  "status": "awaiting_recorder"
+  "status": "recording",
+  "startedAt": "2026-06-03T12:00:00.000Z",
+  "updatedAt": "2026-06-03T12:00:00.000Z",
+  "completedAt": null,
+  "failureReason": null
 }
 ```
 
-### POST `/api/recordings/sessions/:sessionId/pause`
-Pauses an active session.
+Side effects: a `recordings` archive row is created, Egress is started, an
+audit-log entry `recording.started` is written, and every participant receives
+`recording-session-updated` over Socket.IO.
 
-### POST `/api/recordings/sessions/:sessionId/resume`
-Resumes a paused session.
+| Status | Cause |
+|---|---|
+| `400` | Missing `roomId`, or `consentConfirmed` not `true` |
+| `403` | Not the room owner |
+| `507` | `RECORDING_STORAGE_FULL` |
 
-### POST `/api/recordings/sessions/:sessionId/stop`
-Moves a session into `stopping`. The recorder worker should finalize and then call `complete` or `fail`.
+### `POST /api/recordings/sessions/:sessionId/pause`
 
-### GET `/api/recordings`
-Lists archived recordings owned by the authenticated user.
+Stops the current Egress segment and moves the session to `paused`.
 
-Response `200`:
+### `POST /api/recordings/sessions/:sessionId/resume`
+
+Re-checks quota, starts a new Egress segment, returns to `recording`. Can return
+`507`.
+
+### `POST /api/recordings/sessions/:sessionId/stop`
+
+Stops the final segment, marks the session `completed`, and flips the archive row
+to `status = 'ready'` with `completed_at` set.
+
+### `GET /api/recordings/rooms/:roomId/active`
+
+```json
+{ "session": { "id": "<uuid>", "status": "recording" } }
+```
+
+`session` is `null` when nothing is recording.
+
+### `GET /api/recordings/sessions/:sessionId`
+
+Returns one session. `404` if unknown, `403` if you do not own the room.
+
+### `GET /api/recordings`
+
+Archived recordings owned by the caller, newest first, joined with the room title:
+
 ```json
 [
   {
-    "id": "uuid",
-    "room_id": "uuid",
+    "id": "<uuid>",
+    "room_id": "<uuid>",
     "room_title": "Team sync",
     "status": "ready",
     "started_at": "2026-06-03T12:00:00.000Z",
     "completed_at": "2026-06-03T12:45:00.000Z",
-    "video_path": "storage/recordings/uuid-video.webm",
-    "audio_path": "storage/recordings/uuid-audio.webm"
+    "object_key": "recordings/<uuid>.mp4",
+    "video_path": null,
+    "audio_path": null
   }
 ]
 ```
 
-### GET `/api/recordings/:recordingId/video`
-Downloads the archived video artifact for a completed recording.
+### `GET /api/recordings/:recordingId/video` · `GET /api/recordings/:recordingId/audio`
 
-### GET `/api/recordings/:recordingId/audio`
-Downloads the archived audio artifact for a completed recording.
+Two delivery paths, depending on where the artifact lives:
 
-### DELETE `/api/recordings/:recordingId`
-Deletes a recording archive row plus any saved video/audio files owned by the authenticated user.
+- **Object storage** (production): responds `302` to a short-lived presigned MinIO
+  URL. The bucket itself stays private.
+- **Local disk** (development): streams the file with `Content-Disposition:
+  attachment`.
 
-Response `200`:
+`404` if that artifact kind was never produced; `403` if you do not own it.
+
+### `DELETE /api/recordings/:recordingId`
+
+Deletes the archive row, the session row, every stored object for its segments,
+and any local files. Owner only.
+
 ```json
 { "message": "Recording deleted successfully" }
 ```
 
-### Recorder Service API
-
-These endpoints are for the hidden recorder worker, not for end users.
-
-Auth:
-- `Authorization: Bearer <RECORDER_SERVICE_TOKEN>`
-- or `x-recorder-service-token: <RECORDER_SERVICE_TOKEN>`
-
-### GET `/api/recording-service/sessions/claimable`
-Lists sessions currently in `awaiting_recorder`.
-
-### POST `/api/recording-service/sessions/:sessionId/claim`
-Body:
-```json
-{
-  "serviceInstanceId": "recorder-worker-1",
-  "recorderSocketId": "socket-id"
-}
-```
-
-Effect:
-- assigns the worker to the session
-- stores the hidden recorder socket id
-- changes status to `recording`
-
-### POST `/api/recording-service/sessions/:sessionId/heartbeat`
-Body:
-```json
-{ "serviceInstanceId": "recorder-worker-1" }
-```
-
-### PUT `/api/recording-service/sessions/:sessionId/artifacts/video`
-Raw request body:
-- content type: worker recorder mime type, typically `video/webm`
-
-### PUT `/api/recording-service/sessions/:sessionId/artifacts/audio`
-Raw request body:
-- content type: worker recorder mime type, typically `audio/webm`
-
-### POST `/api/recording-service/sessions/:sessionId/complete`
-Marks the session `completed`.
-
-### POST `/api/recording-service/sessions/:sessionId/fail`
-Body:
-```json
-{ "reason": "ffmpeg pipeline exited unexpectedly" }
-```
-
-Marks the session `failed`.
-
-### Hidden Recorder Socket Contract
-
-Socket event:
-- `join-recorder`
-
-Payload:
-```json
-{
-  "roomId": "uuid",
-  "sessionId": "uuid",
-  "serviceInstanceId": "recorder-worker-1",
-  "serviceToken": "<RECORDER_SERVICE_TOKEN>"
-}
-```
-
-Behavior:
-- backend joins the recorder socket to the room
-- recorder is added as a hidden participant
-- recorder is excluded from visible participant lists
-- recorder can continue recording even if the host disconnects, as long as the meeting itself continues
-
-### Recorder Worker Runtime
-
-This repo now includes a server-side worker launcher:
-- run from `server/`
-- `npm run recorder:worker`
-
-Behavior:
-- polls `/api/recording-service/sessions/claimable`
-- opens a backend-served hidden browser page at `/recorder/:sessionId`
-- page joins with `join-recorder`
-- page records remote media composite and audio mix
-- page uploads video/audio artifacts through the recorder-service API
-- backend startup reloads unfinished `recording_sessions` rows from MySQL so workers can reclaim them after restart
-
 ---
 
-### Calendars (Protected)
+## Calendars API
 
-## Calendar Types
+Mounted at `/api/calendars`. **All routes require authentication.**
 
-`settings.calendarType` supports:
-- `personal`
-- `event`
-- `round_robin`
+### Calendar types
 
-Type behavior:
-- `personal`: slot capacity is 1
-- `event`: slot capacity is `settings.eventCapacity` (>=1)
-- `round_robin`: slot capacity is number of available round-robin members for that slot
+`settings.calendarType` controls how slot capacity is computed:
 
-Recording prompt behavior:
-- `settings.autoRecordMeeting: true` enables host confirmation prompt on room entry
-- Prompt options: start recording now, or cancel and record later
-- Manual host recording controls remain available in-room (`Record`, `Pause`, `Resume`, `Stop recording`)
+| Type | Capacity per slot |
+|---|---|
+| `personal` | Always 1 |
+| `event` | `settings.eventCapacity` (>= 1) |
+| `round_robin` | Number of round-robin members available for that slot |
 
-Round-robin booking behavior:
-- Member list is provided in `settings.roundRobinMembers`
-- Each member needs valid `id` or `email` (must exist in `users` table)
-- Backend resolves and stores normalized member entries (`id`, `name`, `email`)
-- On booking creation, backend assigns one available member to slot and stores:
-  - `assigned_user_id`
-  - `assigned_user_name`
-  - `assigned_user_email`
+### Round-robin members
 
-Per-member availability (round robin):
-- Optional per member:
+Members go in `settings.roundRobinMembers`. Each needs a valid `id` **or** `email`
+that exists in `users`; the backend resolves and stores a normalized
+`{ id, name, email }`. Members may carry per-weekday availability:
+
 ```json
 {
+  "email": "alex@example.com",
   "availability": {
     "monday": [{ "start": "10:00", "end": "12:00" }],
     "tuesday": [{ "start": "09:00", "end": "11:00" }]
   }
 }
 ```
-- Slot capacity/count for round-robin uses members available for that day/time.
 
-### POST `/api/calendars`
-Create calendar.
+On booking, one available member is assigned and stored on the booking as
+`assigned_user_id`, `assigned_user_name`, `assigned_user_email`.
 
-Body example:
+### `POST /api/calendars`
+
 ```json
 {
   "title": "Consultation",
@@ -353,28 +442,13 @@ Body example:
     "calendarType": "round_robin",
     "eventCapacity": 1,
     "autoRecordMeeting": true,
-    "roundRobinMembers": [
-      {
-        "email": "alex@example.com",
-        "availability": {
-          "monday": [{ "start": "10:00", "end": "12:00" }]
-        }
-      },
-      {
-        "id": 12,
-        "availability": {
-          "monday": [{ "start": "09:00", "end": "11:00" }]
-        }
-      }
-    ],
+    "roundRobinMembers": [{ "email": "alex@example.com" }],
     "slotDurationMinutes": 30,
     "slotIntervalMinutes": 30,
     "bufferBeforeMinutes": 0,
     "bookingWindowDays": 30,
     "dailySlotLimit": 8,
-    "availability": {
-      "monday": [{ "start": "09:00", "end": "17:00" }]
-    },
+    "availability": { "monday": [{ "start": "09:00", "end": "17:00" }] },
     "notificationPreferences": { "creatorEmailEnabled": true, "bookerEmailEnabled": true },
     "reminderOffsetsMinutes": [10, 5, 1],
     "embedEnabled": true,
@@ -389,37 +463,37 @@ Body example:
 }
 ```
 
-### GET `/api/calendars`
-List creator calendars.
+`settings.autoRecordMeeting: true` makes the room prompt the host to start
+recording on entry. It does **not** start recording automatically — the host still
+confirms consent.
 
-### GET `/api/calendars/:calendarId`
-Get one calendar with related data.
+### `GET /api/calendars`
 
-Response includes:
-- calendar details
-- `disabledSlots`
-- `holidays`
-- `bookings` (includes `assignedUserId`, `assignedUserName`, `assignedUserEmail` when present)
+List calendars owned by the caller.
 
-### PATCH `/api/calendars/:calendarId`
-Update calendar metadata/settings/form.
+### `GET /api/calendars/:calendarId`
 
-### POST `/api/calendars/:calendarId/disabled-slots`
-Body:
+One calendar plus `disabledSlots`, `holidays`, and `bookings` (including
+`assignedUserId`, `assignedUserName`, `assignedUserEmail` when set).
+
+### `PATCH /api/calendars/:calendarId`
+
+Update metadata, `settings`, or `bookingForm`.
+
+### `POST /api/calendars/:calendarId/disabled-slots`
+
 ```json
 { "startAt": "2026-06-02T09:00:00.000Z", "endAt": "2026-06-02T10:00:00.000Z", "reason": "maintenance" }
 ```
 
-### POST `/api/calendars/:calendarId/holidays`
-Body:
+### `POST /api/calendars/:calendarId/holidays`
+
 ```json
 { "holidayDate": "2026-06-17", "label": "Holiday", "isFullDay": true }
 ```
 
-### GET `/api/calendars/:calendarId/slots?date=YYYY-MM-DD`
-Generate slots for date.
+### `GET /api/calendars/:calendarId/slots?date=YYYY-MM-DD`
 
-Slot example:
 ```json
 {
   "startAt": "2026-06-03T04:00:00.000Z",
@@ -435,10 +509,8 @@ Slot example:
 }
 ```
 
-### POST `/api/calendars/:calendarId/bookings`
-Create booking.
+### `POST /api/calendars/:calendarId/bookings`
 
-Body:
 ```json
 {
   "slotStartAt": "2026-06-03T04:00:00.000Z",
@@ -448,69 +520,60 @@ Body:
 }
 ```
 
-Response `201`:
+`201`:
+
 ```json
 {
   "booking": {
-    "id": "uuid",
-    "calendar_id": "uuid",
+    "id": "<uuid>",
+    "calendar_id": "<uuid>",
     "assigned_user_id": 12,
     "assigned_user_name": "Alex",
     "assigned_user_email": "alex@example.com",
     "status": "confirmed"
   },
   "meetingUrl": "http://localhost:3001/meetings/<bookingId>",
-  "confirmationMessage": "...",
-  "reminders": [{ "minutesBefore": 10, "remindAt": "..." }]
+  "confirmationMessage": "Thanks Alice, your booking is confirmed.",
+  "reminders": [{ "minutesBefore": 10, "remindAt": "2026-06-03T03:50:00.000Z" }]
 }
 ```
 
-### GET `/api/calendars/:calendarId/bookings?date=YYYY-MM-DD&status=confirmed`
-Creator booking list with optional filters.
+> **Overbooking is prevented at the database level.** The availability check and
+> the insert run inside a MySQL advisory lock scoped to the calendar, so two
+> simultaneous bookings for the last seat cannot both succeed. The loser gets `409`.
 
----
+### `GET /api/calendars/:calendarId/bookings?date=YYYY-MM-DD&status=confirmed`
 
-### Booking Management (Protected)
+Owner booking list with optional filters.
 
-### POST `/api/bookings/:bookingId/cancel`
-Cancel booking (calendar creator only).
+### `POST /api/bookings/:bookingId/cancel`
 
-Body:
+Mounted at `/api/bookings`. Calendar owner only.
+
 ```json
 { "cancelReason": "Canceled by creator" }
 ```
 
 ---
 
-### Public Calendar API (No Auth)
+## Public booking API
 
-### GET `/api/public/calendars/:slug`
-Public calendar details for share/embed.
+Mounted at `/api/public/calendars`. **No authentication.** Rate limited to 120
+requests per minute.
 
-### GET `/api/public/calendars/:slug/slots?date=YYYY-MM-DD`
-Public slot generation.
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/public/calendars/:slug` | Calendar details for a share or embed page |
+| `GET /api/public/calendars/:slug/slots?date=YYYY-MM-DD` | Public slot generation |
+| `POST /api/public/calendars/:slug/bookings` | Public booking creation |
+| `GET /api/public/calendars/meetings/:bookingId` | Look up a booking's meeting |
 
-### POST `/api/public/calendars/:slug/bookings`
-Public booking creation.
+The booking body matches the authenticated version. The meeting lookup returns:
 
-Body:
-```json
-{
-  "slotStartAt": "2026-06-03T04:00:00.000Z",
-  "bookerName": "Alice",
-  "bookerEmail": "alice@example.com",
-  "responses": { "company": "Acme" }
-}
-```
-
-### GET `/api/public/calendars/meetings/:bookingId`
-Public meeting lookup by booking ID.
-
-Response includes calendar recording/type hints:
 ```json
 {
   "booking": {
-    "id": "uuid",
+    "id": "<uuid>",
     "status": "confirmed",
     "slotStartAt": "2026-06-03T04:00:00.000Z",
     "slotEndAt": "2026-06-03T04:30:00.000Z",
@@ -518,112 +581,225 @@ Response includes calendar recording/type hints:
     "meetingUrl": "http://localhost:3001/meetings/<bookingId>"
   },
   "calendar": {
-    "id": "uuid",
+    "id": "<uuid>",
     "title": "Consultation",
     "timezone": "Asia/Dhaka",
     "slug": "consultation-abc123",
-    "settings": {
-      "calendarType": "round_robin",
-      "autoRecordMeeting": true
-    }
+    "settings": { "calendarType": "round_robin", "autoRecordMeeting": true }
   }
 }
 ```
 
 ---
 
-## Error Conventions
+## Webhooks and operations
 
-Common statuses:
-- `400` bad request / invalid input
-- `401` missing auth
-- `403` forbidden
-- `404` not found
-- `409` conflict (e.g. slot unavailable)
-- `500` server error
+### `POST /api/webhooks/livekit`
 
-Typical body:
+Receives LiveKit server events (room finished, egress ended, participant
+lifecycle). The body is read **raw** and its signature is verified with
+`LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`; unsigned requests are rejected.
+Processed event IDs are recorded in `livekit_webhook_events` so retries are
+idempotent.
+
+Accepted content types: `application/webhook+json`, `application/json`. Max 256 KB.
+
+### `GET /api/health`
+
+Public. Used by Docker health checks and uptime probes.
+
 ```json
-{ "error": "Human readable message" }
+{
+  "status": "ok",
+  "redis": "ready",
+  "storage": "ready",
+  "timestamp": "2026-06-02T12:00:00.000Z"
+}
 ```
 
----
+`redis` is `ready` or `disabled`. `storage` is `ready`, `missing-bucket`, or
+`unavailable`.
 
-## Socket.IO Realtime Contract (Server)
+### `GET /metrics`
 
-Connection:
-- Connect to server URL (default `http://localhost:3001`)
-- Send JWT in `auth.token` (client currently uses localStorage token)
-
-Client -> Server:
-- `request-join` `{ roomId, userId, userData, isHost }`
-- `approve-join` `{ roomId, targetSocketId }`
-- `deny-join` `{ roomId, targetSocketId }`
-- `approve-all` `{ roomId }`
-- `host-mute` `{ roomId, targetSocketId }`
-- `host-mute-all` `{ roomId }`
-- `host-stop-video` `{ roomId, targetSocketId }`
-- `transfer-host` `{ roomId, targetSocketId }`
-- `raise-hand` `{ roomId, userId, userData }`
-- `lower-hand` `{ roomId }`
-- `request-unmute` `{ roomId, userId, userData }`
-- `approve-unmute` `{ roomId, targetSocketId }`
-- `deny-unmute` `{ roomId, targetSocketId }`
-- `send-offer` `{ roomId, targetSocketId, offer }`
-- `send-answer` `{ roomId, targetSocketId, answer }`
-- `send-ice-candidate` `{ roomId, targetSocketId, candidate }`
-- `send-message` `{ roomId, message, senderName, timestamp }`
-- `toggle-camera` `{ roomId, enabled }`
-- `toggle-microphone` `{ roomId, enabled }`
-- `start-screen-share` `{ roomId, offer }` (legacy event currently unused by hook)
-- `stop-screen-share` `{ roomId }` (legacy event currently unused by hook)
-- `leave-room` `(roomId, userId)`
-- `end-meeting` `{ roomId }`
-- `join-recorder` `{ roomId, sessionId, serviceInstanceId, serviceToken }`
-
-Server -> Client:
-- `join-pending` `{ roomId, waitingForHost }`
-- `join-approved` `{ roomId, isHost }`
-- `join-denied` `{ roomId }`
-- `join-request` `{ roomId, socketId, userId, userData }`
-- `room-participants` `Participant[]`
-- `user-joined` `{ userId, socketId, userData }`
-- `user-left` `{ socketId, userId }`
-- `receive-offer` `{ socketId, offer }`
-- `receive-answer` `{ socketId, answer }`
-- `receive-ice-candidate` `{ socketId, candidate }`
-- `force-mute` `{ roomId }`
-- `force-video-off` `{ roomId }`
-- `unmute-request` `{ roomId, socketId, userId, userData }`
-- `allow-unmute` `{ roomId }`
-- `unmute-denied` `{ roomId }`
-- `hand-raised` `{ roomId, socketId, userId, userData }`
-- `hand-lowered` `{ roomId, socketId }`
-- `host-changed` `{ hostSocketId, hostUserId }`
-- `visible-participants-updated` `Participant[]`
-- `recording-session-updated` `RecordingSession | null`
-- `recorder-joined` `{ roomId, sessionId, socketId }`
-- `recorder-join-denied` `{ roomId, sessionId }`
-- `meeting-ended` `{ roomId }`
-- `meeting-end-failed` `{ roomId }`
-- `auth-error` `{ message }`
+Prometheus exposition format: active rooms, participants, and the counters in
+[`server/services/metrics.ts`](server/services/metrics.ts). **Do not expose this
+publicly** — bind it to your private monitoring network.
 
 ---
 
-## Media / Recording Notes
+## Socket.IO realtime contract
 
-- Host recording UI now controls a backend session manager.
-- The browser is no longer the source of truth for recording lifecycle.
-- A hidden recorder worker is expected to join the room and execute the actual capture pipeline.
-- If the host leaves but the meeting remains active, the recorder worker can continue because it is a separate hidden participant.
-- Screen share still has frontend option to include device audio (`getDisplayMedia({ audio: true })` when enabled).
-- Device audio availability depends on browser and capture target (tab/window/system constraints).
+Socket.IO carries application events only: waiting room, moderation, chat,
+presence, and recording status. **It never carries meeting media.** Media is
+LiveKit's job.
+
+**Connect to the backend origin — `http://localhost:3002` locally**, not the
+frontend port. The handshake credential is resolved in this order:
+
+1. `tsmeet_session` cookie (browsers)
+2. `auth.token` (legacy mesh client)
+3. `Authorization: Bearer` header
+
+An unusable token emits `auth-error` and leaves the socket unauthenticated —
+`request-join` will then reject it.
+
+### Participant object
+
+Sent in `room-participants` and `visible-participants-updated`:
+
+```ts
+{
+  userId: string;
+  socketId: string;
+  userData: { name: string; avatar?: string };
+  joinedAt: string;
+  hidden?: boolean;            // recorder identities are hidden
+  role?: 'user' | 'recorder';
+}
+```
+
+### Joining a meeting
+
+```text
+client                          server                        host client
+  │  request-join ───────────────►│
+  │                               │  password set & wrong?
+  │◄──────── password-incorrect ──┤
+  │                               │  password set & absent?
+  │◄──────── password-required ───┤
+  │                               │  locked / full / unauthenticated?
+  │◄──────── join-denied ─────────┤   { roomId, message }
+  │                               │
+  │◄──────── join-pending ────────┤   host must approve
+  │                               ├───── join-request ─────────►│
+  │                               │◄──── approve-join ──────────┤
+  │◄──────── join-approved ───────┤
+  │◄──────── room-participants ───┤
+```
+
+Only after `join-approved` will `POST /api/media/token` issue a LiveKit token.
+The waiting room is the authorisation gate for media, not just a UI step.
+
+### Client → server
+
+| Event | Payload | Who may send it |
+|---|---|---|
+| `request-join` | `{ roomId, userId, userData, isHost, token?, roomPassword? }` | anyone |
+| `approve-join` | `{ roomId, targetSocketId }` | host / co-host |
+| `deny-join` | `{ roomId, targetSocketId }` | host / co-host |
+| `approve-all` | `{ roomId }` | host / co-host |
+| `host-mute` | `{ roomId, targetSocketId }` | host / co-host |
+| `host-mute-all` | `{ roomId }` | host / co-host |
+| `host-stop-video` | `{ roomId, targetSocketId }` | host / co-host |
+| `remove-participant` | `{ roomId, targetSocketId }` | host / co-host |
+| `set-meeting-lock` | `{ roomId, locked }` | host |
+| `transfer-host` | `{ roomId, targetSocketId }` | host |
+| `promote-cohost` | `{ roomId, targetSocketId }` | host |
+| `demote-cohost` | `{ roomId, targetSocketId }` | host |
+| `end-meeting` | `{ roomId }` | host |
+| `raise-hand` | `{ roomId, userId, userData }` | participant |
+| `lower-hand` | `{ roomId }` | participant |
+| `request-unmute` | `{ roomId, userId, userData }` | participant |
+| `approve-unmute` | `{ roomId, targetSocketId }` | host / co-host |
+| `deny-unmute` | `{ roomId, targetSocketId }` | host / co-host |
+| `send-message` | `{ roomId, message, senderName, timestamp? }` | participant |
+| `toggle-camera` | `{ roomId, enabled }` | participant |
+| `toggle-microphone` | `{ roomId, enabled }` | participant |
+| `network-quality` | `{ roomId, quality }` | participant |
+| `leave-room` | `(roomId, userId)` — positional args, not an object | participant |
+| `send-offer` | `{ roomId, targetSocketId, offer }` | mesh provider only |
+| `send-answer` | `{ roomId, targetSocketId, answer }` | mesh provider only |
+| `send-ice-candidate` | `{ roomId, targetSocketId, candidate }` | mesh provider only |
+| `start-screen-share` | `{ roomId, offer }` | mesh provider only |
+| `stop-screen-share` | `{ roomId }` | mesh provider only |
+
+Every moderation event verifies that the sender **and** the target are current
+participants of that room before acting, and writes a `security_audit_logs` row.
+
+### Server → client
+
+**Join and presence**
+
+| Event | Payload |
+|---|---|
+| `join-pending` | `{ roomId, waitingForHost }` |
+| `join-approved` | `{ roomId, isHost, iceServers }` — `iceServers` is `[]` unless the room uses mesh |
+| `join-denied` | `{ roomId, message }` |
+| `join-request` | `{ roomId, socketId, userId, userData }` — sent to the host |
+| `password-required` | `{ roomId }` |
+| `password-incorrect` | `{ roomId }` |
+| `room-participants` | `Participant[]` — excludes the recipient |
+| `visible-participants-updated` | `Participant[]` — hidden identities filtered out |
+| `user-joined` | `{ userId, socketId, userData }` |
+| `user-left` | `{ socketId, userId }` |
+
+**Moderation and roles**
+
+| Event | Payload |
+|---|---|
+| `force-mute` | `{ roomId }` |
+| `force-video-off` | `{ roomId }` |
+| `participant-removed` | `{ roomId }` — sent to the removed socket |
+| `meeting-lock-changed` | `{ roomId, locked }` |
+| `host-changed` | `{ hostSocketId, hostUserId }` |
+| `cohost-promoted` | `{ userId, socketId }` |
+| `cohost-demoted` | `{ userId, socketId }` |
+| `hand-raised` | `{ roomId, socketId, userId, userData }` |
+| `hand-lowered` | `{ roomId, socketId }` |
+| `unmute-request` | `{ roomId, socketId, userId, userData }` |
+| `allow-unmute` | `{ roomId }` |
+| `unmute-denied` | `{ roomId }` |
+
+**Chat, device state, and lifecycle**
+
+| Event | Payload |
+|---|---|
+| `receive-message` | `{ socketId, message, senderName, timestamp }` |
+| `user-camera-toggled` | `{ socketId, enabled }` |
+| `user-microphone-toggled` | `{ socketId, enabled }` |
+| `user-screen-share-started` | `{ socketId, offer }` — mesh only |
+| `user-screen-share-stopped` | `{ socketId }` — mesh only |
+| `recording-session-updated` | `RecordingSession \| null` |
+| `meeting-ended` | `{ roomId }` |
+| `meeting-end-failed` | `{ roomId }` |
+| `auth-error` | `{ message }` |
+
+> **Host failover.** If the host socket disconnects, `RoomManager` promotes a
+> replacement and broadcasts `host-changed`. When the original creator
+> reconnects, they reclaim host automatically — a temporary fallback host does not
+> permanently own the meeting.
 
 ---
 
-## Source of Truth Files
+## Next.js proxy layer
 
-- HTTP routes: `server/routes/*.ts`
-- Socket handlers: `server/index.ts`
-- Calendar slot logic/types: `server/services/calendarService.ts`
-- Frontend media controls (recording session control, share-audio option): `app/room/[roomId]/page.tsx`, `hooks/useWebRTC.ts`
+Browser code calls same-origin `/api/*` routes under [`app/api/`](app/api/). Each
+one forwards to Express through [`app/api/_proxy.ts`](app/api/_proxy.ts),
+preserving the `tsmeet_session` cookie and disabling caching.
+
+Why this layer exists:
+
+- The session cookie stays **HttpOnly and same-origin**. No JWT touches
+  `localStorage` on the LiveKit path.
+- The Express origin does not need permissive CORS for browsers.
+- The backend URL is server-side configuration (`BACKEND_URL`), not a public
+  build-time value.
+
+If Express is unreachable the proxy returns `502` with
+`{ "error": "Backend server is unavailable. Is it running on port 3002?" }`.
+
+---
+
+## Source of truth
+
+| Concern | File |
+|---|---|
+| Route mounting, socket handlers | [`server/index.ts`](server/index.ts) |
+| REST handlers | [`server/routes/`](server/routes/) |
+| Slot and booking logic | [`server/services/calendarService.ts`](server/services/calendarService.ts) |
+| LiveKit tokens, grants, room admin | [`server/services/livekit.ts`](server/services/livekit.ts) |
+| Egress recording | [`server/services/egress.ts`](server/services/egress.ts) |
+| In-memory room and role state | [`server/services/roomManager.ts`](server/services/roomManager.ts) |
+| Browser media | [`hooks/useLiveKitRoom.ts`](hooks/useLiveKitRoom.ts) |
+| Proxy routes | [`app/api/`](app/api/) |

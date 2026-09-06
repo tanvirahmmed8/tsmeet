@@ -3,12 +3,21 @@
 Thanks for helping improve TSMeet. Contributions are welcome for bug fixes,
 features, tests, documentation, accessibility, and deployment improvements.
 
+This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md). By taking part,
+you agree to uphold it.
+
 ## Before you start
 
-1. Read [README.md](./README.md) for the product overview.
-2. Read [SETUP_GUIDE.md](./SETUP_GUIDE.md) for local development.
-3. For architecture or media changes, read [ARCHITECTURE.md](./ARCHITECTURE.md).
-4. For production changes, read [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md).
+| Read this | When |
+|---|---|
+| [README.md](./README.md) | Always — product overview and quick start |
+| [SETUP_GUIDE.md](./SETUP_GUIDE.md) | Always — local development setup |
+| [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) | To understand a feature from the user's side |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture, media, auth, or state changes |
+| [API.md](./API.md) | Any REST or Socket.IO change |
+| [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) | Production or deployment changes |
+| [docs/README.md](./docs/README.md) | The documentation index and writing conventions |
+| [SECURITY.md](./SECURITY.md) | Before reporting anything security-related |
 
 Please search existing issues and pull requests before opening a new one.
 
@@ -43,6 +52,10 @@ LiveKit YAML, or TLS private keys.
 2. Keep the change focused and avoid unrelated formatting or dependency updates.
 3. Add or update tests for behavior changes.
 4. Update the relevant documentation and `.env.example` when configuration changes.
+   Adding or removing a REST route or socket event means updating
+   [API.md](./API.md) **in the same pull request** — it is the contract, and a
+   stale one is worse than none. Follow the conventions in
+   [docs/README.md](./docs/README.md#documentation-conventions).
 5. Run the checks below before opening a pull request.
 
 Suggested branch prefixes are `feat/`, `fix/`, `docs/`, `test/`, `refactor/`,
@@ -112,10 +125,11 @@ and follow-up work rather than silently changing behavior outside the request.
 
 ## Reporting security issues
 
-Do not open a public issue for a suspected vulnerability. Contact the project
-maintainer privately with reproduction details, affected versions, and a safe
-way to follow up. Do not include credentials, session cookies, or production
-URLs containing secrets in reports.
+Do not open a public issue for a suspected vulnerability. Follow
+[SECURITY.md](./SECURITY.md), which covers the private reporting channel, what
+to include, what is in and out of scope, and the response times you can expect.
+Never include credentials, session cookies, or production URLs containing
+secrets.
 
 ## License
 

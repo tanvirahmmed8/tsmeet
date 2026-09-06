@@ -165,6 +165,9 @@ DB_HOST_PORT=13306
 DB_POOL_SIZE=20
 
 JWT_SECRET=GENERATE_AT_LEAST_32_RANDOM_BYTES
+# Configured ceiling, not a tested guarantee. Verified capacity on the 8-vCPU
+# reference node is 20 participants -- see docs/CAPACITY_AND_SCALING.md before
+# planning for more.
 MAX_PARTICIPANTS=50
 MAX_MESH_PARTICIPANTS=8
 
