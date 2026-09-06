@@ -6,15 +6,30 @@ TSMeet runs under your control: you provide the VPS, domains, TLS certificates, 
 
 ## Features
 
-- Next.js frontend (`3001`) and Express/Socket.IO backend (`3002`)
-- LiveKit SFU audio, video, screen sharing, simulcast, and adaptive subscriptions
-- MySQL users, rooms, roles, waiting rooms, calendars, and bookings
-- Redis coordination for Socket.IO and LiveKit/Egress
-- Host moderation: admit/deny, mute, stop video, remove, co-host, lock, transfer host, and end meeting
-- Hand raise, chat, device selection, low-data mode, and network-aware video quality
-- Room-scoped guest sessions using short-lived HttpOnly cookies
-- Optional LiveKit Egress + private MinIO recording
-- Optional Prometheus/Grafana/Loki observability profiles
+### In a meeting
+
+- Start or join a meeting with a camera and microphone preview
+- Live camera and microphone controls with device selection
+- Screen sharing with optional tab/system audio
+- Gallery view, active-speaker/pinned participant view, and hide-your-tile
+- Adaptive video quality and low-data mode for changing networks
+- In-meeting chat, hand raising, and participant status indicators
+
+### Host controls
+
+- Waiting room with admit, deny, and request-again flow
+- Mute all, stop a participant's video, remove participants, and lock the room
+- Assign or remove co-hosts, transfer host, and end the meeting for everyone
+- Participant panel with search, host badges, mute state, hand-raised state, and pinning
+- Recording consent prompt plus start, pause, resume, and stop controls
+
+### Outside the meeting
+
+- Account registration, sign-in, sign-out, and protected dashboard
+- Create rooms with titles and optional passwords
+- Calendar availability, holidays, public booking pages, confirmations, and cancellations
+- Meeting history and private recording archive with download and deletion
+- Guest access through a shareable room link without requiring an account
 
 ## Architecture
 

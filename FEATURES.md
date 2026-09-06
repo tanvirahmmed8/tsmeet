@@ -2,17 +2,25 @@
 
 TSMeet is a self-hosted, open-source meeting and scheduling platform built with Next.js, Node.js, Socket.IO, and LiveKit.
 
-## Meetings
+## Meeting experience
 
-- Self-hosted LiveKit SFU audio/video with adaptive quality and efficient per-track subscriptions.
-- Screen sharing with optional tab/system audio, camera and microphone controls, hand raising, chat, pinning, and responsive gallery layouts.
-- Waiting room, host/co-host moderation, participant mute/remove, lock meeting, and end-meeting controls.
+- Camera and microphone preview before joining, with selectable input/output devices.
+- Live audio/video meetings with gallery, active-speaker, pinned-participant, and hide-your-tile views.
+- Screen sharing for a tab, window, or entire screen, with optional system/tab audio.
+- Adaptive video quality and low-data mode that respond to network conditions.
+- In-meeting chat, hand raising, participant status, and responsive controls.
+
+## Host and participant controls
+
+- Waiting room with admit, deny, and request-again flow.
+- Mute all, stop video, remove participants, lock meeting, co-hosts, host transfer, and end-for-everyone.
+- Searchable participant panel with host badges, mute state, raised-hand state, and pinning.
 - Legacy WebRTC mesh fallback for controlled small rooms (`MAX_MESH_PARTICIPANTS`, 8 by default).
 
 ## Scheduling and accounts
 
 - Calendar availability, holidays, public booking pages, confirmations, cancellations, and meeting links.
-- Registration/login with bcrypt and HttpOnly `tsmeet_session` cookies; guest links can join without an account.
+- Registration, sign-in/sign-out, protected dashboard, and guest links without an account.
 - Dashboard for meetings, calendars, bookings, participants, and recordings.
 
 ## Recording
