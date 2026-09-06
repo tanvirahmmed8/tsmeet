@@ -8,11 +8,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -29,7 +27,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -37,6 +35,10 @@ jobs:
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-      - uses: github/codeql-action/upload-sarif@v3
+      # Fork pull requests do not receive security-events: write. Keep the
+      # local Trivy scan on every event, but upload SARIF only for repository
+      # pushes where the token can write code-scanning results.
+      - if: github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif

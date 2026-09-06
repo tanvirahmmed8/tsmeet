@@ -1,43 +1,57 @@
 # TSMeet
 
-Self-hosted video meetings with a Zoom/Google Meet-style interface, waiting-room admission, LiveKit SFU media, scheduling, chat, moderation, and optional server-side recording.
+Self-hosted video meetings, scheduling, API access, and server-managed recording.
 
-TSMeet runs under your control: you provide the VPS, domains, TLS certificates, and optional infrastructure.
+TSMeet is a Zoom/Google Meet-style web application that you can run on your own
+VPS or local machine. Meeting media uses a self-hosted LiveKit SFU; application
+presence, moderation, waiting-room, and chat events use Socket.IO.
 
-## Features
+## Key features
 
-### In a meeting
+### Meeting experience
 
-- Start or join a meeting with a camera and microphone preview
-- Live camera and microphone controls with device selection
-- Screen sharing with optional tab/system audio
-- Gallery view, active-speaker/pinned participant view, and hide-your-tile
-- Adaptive video quality and low-data mode for changing networks
-- In-meeting chat, hand raising, and participant status indicators
+- Camera and microphone preview before joining
+- Gallery, active-speaker, pinned participant, and hide-your-tile views
+- Screen sharing for a browser tab, window, or entire screen
+- Optional tab/system audio while sharing
+- Adaptive video quality and low-data mode
+- Device selection for microphones, cameras, and speakers
+- In-meeting chat, hand raising, participant status, and responsive controls
 
-### Host controls
+### Host and participant controls
 
 - Waiting room with admit, deny, and request-again flow
-- Mute all, stop a participant's video, remove participants, and lock the room
-- Assign or remove co-hosts, transfer host, and end the meeting for everyone
-- Participant panel with search, host badges, mute state, hand-raised state, and pinning
-- Recording consent prompt plus start, pause, resume, and stop controls
+- Mute all, stop video, remove participants, and lock meeting
+- Co-host assignment, host transfer, and end meeting for everyone
+- Searchable participant panel with host/mute/hand-raised indicators
+- Recording consent prompt and start/pause/resume/stop controls
 
-### Outside the meeting
+### Scheduling and accounts
 
-- Account registration, sign-in, sign-out, and protected dashboard
+- Registration, sign-in/sign-out, and protected dashboard
 - Create rooms with titles and optional passwords
 - Calendar availability, holidays, public booking pages, confirmations, and cancellations
-- Meeting history and private recording archive with download and deletion
 - Guest access through a shareable room link without requiring an account
+- Meeting history and private recording archive with download/deletion controls
 
-## Architecture
+## Architecture at a glance
 
-LiveKit is the default media provider. Browsers publish tracks to the LiveKit SFU and subscribe only to tracks/layers needed by the layout and network conditions. Socket.IO carries application signaling and moderation events; it is not the video transport.
+```text
+Browser
+  |-- HTTPS / same-origin /api proxy --> Next.js frontend :3001
+  |-- Socket.IO application events ----> Express backend :3002
+  `-- WebRTC media (WSS + ICE) --------> LiveKit SFU
 
-Production browser REST requests use same-origin Next.js proxy routes so the `tsmeet_session` cookie reaches the backend. Production VPS media uses LiveKit UDP mux on `7882/udp` with TCP fallback on `7881`, avoiding a large WebRTC UDP range and thousands of Docker NAT rules.
+Express <--> MySQL (durable data)
+Express/Socket.IO/LiveKit/Egress <--> Redis (coordination)
+LiveKit Egress --> private MinIO bucket (optional recording)
+```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md), [docs/adr/0001-self-hosted-livekit-sfu.md](./docs/adr/0001-self-hosted-livekit-sfu.md), and [docs/PRODUCTION_NETWORKING.md](./docs/PRODUCTION_NETWORKING.md).
+Each browser publishes its tracks once to LiveKit and subscribes only to the
+tracks/layers needed by the current layout and network. The server does not
+merge every camera into one stream. Production VPS media uses LiveKit UDP mux
+on `7882/udp` with TCP fallback on `7881/tcp`, avoiding a large UDP range and
+thousands of Docker NAT rules.
 
 ## Quick start with Docker
 
@@ -46,85 +60,76 @@ Prerequisite: Docker Desktop or Docker Engine with the Compose plugin.
 ```bash
 git clone https://github.com/tanvirahmmed8/tsmeet.git
 cd tsmeet
-copy .env.example .env        # PowerShell; use cp on Linux/macOS
-# Edit .env and replace every change-me value.
+cp .env.example .env                 # PowerShell: Copy-Item .env.example .env
+# Replace every change-me value in .env.
 docker compose up -d --build
+docker compose ps
 ```
 
-Open <http://localhost:3001>.
+Open `http://localhost:3001`.
 
-| Service | Purpose | Endpoint |
+| Service | Purpose | Local endpoint |
 |---|---|---|
-| frontend | Next.js application | `http://localhost:3001` |
-| backend | REST API and Socket.IO | `http://localhost:3002` |
-| mysql | Application database | `127.0.0.1:13306` by default |
-| redis | Coordination/cache | internal by default |
+| frontend | Next.js UI and same-origin API proxy | `http://localhost:3001` |
+| backend | Express REST API and Socket.IO | `http://localhost:3002` |
+| mysql | Application database | `127.0.0.1:13306` |
+| redis | Socket.IO/LiveKit coordination | internal Compose network |
 | livekit | SFU/local media | `ws://localhost:7880` |
 
-```bash
-docker compose ps
-docker compose logs -f frontend backend livekit
-```
+The default stack keeps recording and observability disabled. Enable those
+profiles only on a larger server; see
+[docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md).
 
-## Local development without Docker
+## Local development without Docker for the app
 
-Run MySQL, Redis, and LiveKit with Docker, then run the two application processes separately:
+Run MySQL, Redis, and LiveKit with Docker or local services, then run the two
+application processes:
 
 ```bash
 pnpm install
-pnpm dev                         # frontend: http://localhost:3001
+pnpm dev                               # frontend on 3001
 
 cd server
 pnpm install
-npm run dev                      # backend: http://localhost:3002
+pnpm run dev                           # backend on 3002
 ```
 
-The backend initializes the MySQL schema on startup.
+The backend initializes the database schema at startup. See
+[SETUP_GUIDE.md](./SETUP_GUIDE.md) for environment variables and smoke tests.
 
-## Production deployment
+## Authentication and security
 
-Follow [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) for the two-domain VPS setup:
+- Browser login uses an HttpOnly `tsmeet_session` cookie.
+- Authenticated browser REST requests use same-origin Next.js `/api` proxy routes.
+- JWT and LiveKit API secrets remain server-side; JWTs are not stored in localStorage.
+- Media is encrypted in transit with WebRTC DTLS-SRTP.
+- Passwords are hashed with bcrypt and database queries are parameterized.
+- Production cookies are Secure, scoped to `/`, and use an explicit SameSite policy.
+
+## Deployment
+
+For a two-domain VPS deployment, follow
+[VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md). The production layout is:
 
 ```text
-meet.example.com      -> Nginx -> frontend:3001
-api.example.com       -> Nginx -> backend:3002 and LiveKit:7880
-public VPS UDP 7882   -> LiveKit UDP mux
-public VPS TCP 7881   -> LiveKit ICE/TCP fallback
-api.example.com:3478 -> embedded TURN/UDP (optional)
-api.example.com:5349 -> embedded TURN/TLS (optional)
+meet.example.com  -> Nginx -> frontend:3001
+api.example.com   -> Nginx -> backend:3002 and LiveKit WebSocket
+public VPS UDP 7882 -> LiveKit UDP mux
+public VPS TCP 7881 -> LiveKit ICE/TCP fallback
 ```
 
-```env
-FRONTEND_URL=https://meet.example.com
-MEETING_BASE_URL=https://meet.example.com
-BACKEND_URL=http://backend:3002
-NEXT_PUBLIC_SIGNALING_SERVER=https://meet.example.com
-NEXT_PUBLIC_LIVEKIT_URL=wss://api.example.com/livekit
-LIVEKIT_PUBLIC_URL=wss://api.example.com/livekit
-```
+After changing hooks or `NEXT_PUBLIC_*` values, rebuild the frontend. After
+changing LiveKit YAML or published ports, recreate LiveKit. Never use `down -v`
+or delete database volumes during a routine deployment.
 
-`NEXT_PUBLIC_SIGNALING_SERVER` must be the frontend origin so the host-scoped cookie authenticates Socket.IO through Nginx. Never expose `JWT_SECRET` to the browser or store JWTs in localStorage.
+## Limits and operating cost
 
-After frontend code or `NEXT_PUBLIC_*` changes, rebuild `frontend`. After LiveKit YAML or port changes, recreate `livekit`. Never use `down -v` or delete database volumes.
-
-```bash
-./deploy/configure-app.sh
-./deploy/verify-production-config.sh
-./deploy/dc up -d --build frontend
-./deploy/dc up -d --force-recreate livekit
-```
-
-Recording and observability are optional profiles; see [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md).
-
-## Environment and limits
-
-Copy [.env.example](./.env.example) to `.env`. Never commit `.env`, production LiveKit YAML, credentials, or TLS private keys.
-
-- `MAX_PARTICIPANTS=50` — application and LiveKit room limit
-- `MAX_MESH_PARTICIPANTS=8` — legacy mesh fallback only
-- `MEDIA_PROVIDER=livekit` — scalable default
-- `REDIS_PASSWORD` — required and non-empty in production
-- `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and matching `LIVEKIT_KEYS`
+- `MAX_PARTICIPANTS=50` is the application room limit by default.
+- `MAX_MESH_PARTICIPANTS=8` applies only to the legacy mesh rollback provider.
+- `MEDIA_PROVIDER=livekit` is the scalable default.
+- The software and media stack are self-hosted and do not require LiveKit Cloud,
+  Twilio, Agora, Daily, or another managed communications API.
+- You still pay for the VPS, bandwidth, domains, TLS, and storage you choose.
 
 ## Developer commands
 
@@ -133,26 +138,26 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-docker compose down                 # preserves named volumes
 ```
 
 ## Documentation
 
-- [SETUP_GUIDE.md](./SETUP_GUIDE.md) — setup and operations
-- [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) — production VPS, Nginx, TLS, firewall, and deployment
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — components and data flow
-- [API.md](./API.md) — REST and realtime API contracts
-- [FEATURES.md](./FEATURES.md) — implemented feature inventory
-- [docs/PRODUCTION_NETWORKING.md](./docs/PRODUCTION_NETWORKING.md) — public/private ports
-- [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md) — recording and observability
-- [docs/OPERATIONS_HANDBOOK.md](./docs/OPERATIONS_HANDBOOK.md) — operations and backups
-- [docs/CAPACITY_AND_SCALING.md](./docs/CAPACITY_AND_SCALING.md) — capacity guidance
-
-Additional references:
-
+- [SETUP_GUIDE.md](./SETUP_GUIDE.md) - local and Docker setup
+- [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) - production VPS, TLS, DNS, firewall, and updates
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - components, state, media, and security model
+- [API.md](./API.md) - REST, same-origin proxy, and realtime contracts
+- [FEATURES.md](./FEATURES.md) - application feature inventory
+- [docs/PRODUCTION_NETWORKING.md](./docs/PRODUCTION_NETWORKING.md) - LiveKit ports and TURN networking
+- [docs/OPTIONAL_DOCKER_PROFILES.md](./docs/OPTIONAL_DOCKER_PROFILES.md) - recording and observability profiles
+- [docs/OPERATIONS_HANDBOOK.md](./docs/OPERATIONS_HANDBOOK.md) - operations, rollback, and shutdown
 - [docs/STORAGE_BACKUP_AND_RESTORE.md](./docs/STORAGE_BACKUP_AND_RESTORE.md) - recording backup and restore drills
-- [post as project details for my portfolio website.md](./post%20as%20project%20details%20for%20my%20portfolio%20website.md) - portfolio-ready project summary
+- [docs/CAPACITY_AND_SCALING.md](./docs/CAPACITY_AND_SCALING.md) - capacity testing and scaling guidance
+
+## Contributing
+
+Pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the
+development setup, testing checklist, review expectations, and security rules.
 
 ## License
 
-See [LICENSE.md](./LICENSE.md).
+TSMeet is released under the [MIT License](./LICENSE.md).
