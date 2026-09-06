@@ -40,3 +40,6 @@ package-lock.json
 
 # Generated production configuration (contains rendered secrets)
 infrastructure/livekit/livekit.production.yaml
+
+# Personal portfolio notes (keep locally, do not track)
+post as project details for my portfolio website.md
