@@ -218,7 +218,7 @@ and expire quickly.
 
 | Situation | What happens |
 |---|---|
-| You pause and resume | You still get one recording; it is stored in segments internally |
+| You pause and resume | The recording is saved in parts. The archive lists each part separately for download |
 | You leave but the meeting continues | Recording continues — it is not tied to your browser |
 | Storage is full | Starting or resuming fails with a storage-quota error |
 

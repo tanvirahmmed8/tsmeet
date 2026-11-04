@@ -226,7 +226,9 @@ Design points worth keeping:
 - **Consent is enforced by the API**, not only the UI. `consentConfirmed: true`
   is required or the request is rejected with `400`.
 - **Pause/resume produces segments.** One archive row can own several
-  `recording_segments` rows. Do not assume one file per recording.
+  `recording_segments` rows, and `recordings.object_key` names only the first.
+  `GET /api/recordings/:id/segments` lists them all; `?segment=N` downloads one.
+  Do not assume one file per recording.
 - **The bucket stays private.** Downloads go through a `302` to a short-lived
   presigned URL after an ownership check. There is no public object.
 - **Quota is checked on start and on resume**, returning `507` with
@@ -298,6 +300,7 @@ erDiagram
 | `calendars`, `calendar_bookings`, `calendar_disabled_slots`, `calendar_holidays` | Scheduling |
 | `recordings`, `recording_sessions`, `recording_segments` | Recording archive and lifecycle |
 | `livekit_webhook_events` | Processed webhook IDs, for idempotent retries |
+| `users.is_guest` | Marks disposable guest identities for scheduled purging |
 | `security_audit_logs` | Every moderation and recording action |
 | `schema_migrations` | Applied migration tracking |
 
@@ -309,6 +312,18 @@ existing style rather than mixing `?` placeholders into the same file.
 **Booking concurrency.** Availability check and insert run inside a MySQL
 advisory lock scoped to the calendar, so two simultaneous requests for the last
 seat cannot both succeed across API processes.
+
+**Room lifecycle.** `rooms.ended_at` is set **only** by an explicit end-meeting.
+LiveKit's `room_finished` webhook — which fires whenever a room sits empty past
+`empty_timeout` — records `livekit_finished_at` instead. Conflating the two once
+made meeting links die permanently after everyone stepped away for five minutes;
+keep them separate.
+
+**Guest identities.** `POST /api/auth/guest` inserts a real `users` row so
+meeting foreign keys and audit records stay valid. Those rows are flagged
+`is_guest = 1` and purged daily once older than `GUEST_RETENTION_DAYS`
+(default 7), well past the 12-hour guest token. The purge cascades to that
+guest's participation rows; `security_audit_logs` survives with a null actor.
 
 ---
 

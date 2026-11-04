@@ -24,6 +24,7 @@ import { RecordingSessionManager } from './services/recordingSessionManager';
 import { closeRedis, configureRedisAdapter, isRedisReady } from './services/redis';
 import { requestContext } from './middleware/requestContext';
 import { receiveLiveKitWebhook } from './routes/livekitWebhook';
+import { purgeExpiredGuestIdentities } from './services/guestCleanup';
 import {
   deleteLiveKitRoom,
   muteLiveKitParticipant,
@@ -867,9 +868,15 @@ async function start() {
   await enforceRecordingRetention().catch((error) =>
     console.warn('[recordings] initial retention cleanup failed', error)
   );
+  await purgeExpiredGuestIdentities().catch((error) =>
+    console.warn('[guests] initial guest cleanup failed', error)
+  );
   setInterval(() => {
     void enforceRecordingRetention().catch((error) =>
       console.warn('[recordings] scheduled retention cleanup failed', error)
+    );
+    void purgeExpiredGuestIdentities().catch((error) =>
+      console.warn('[guests] scheduled guest cleanup failed', error)
     );
   }, 24 * 60 * 60 * 1000).unref();
 

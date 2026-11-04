@@ -19,6 +19,11 @@ const guestSchema = z.object({
   roomId: z.string().uuid(),
   name: z.string().trim().min(1).max(100),
 });
+// Guest rows need a non-null password_hash but must never be sign-in-able.
+// Hashing once at startup keeps bcrypt.compare() well-defined (it simply fails)
+// without paying a hash on every guest join.
+const unusableGuestPasswordHash = bcrypt.hashSync(randomUUID(), 10);
+
 const getJwtSecret = () => {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
@@ -122,10 +127,10 @@ router.post('/guest', async (req: Request, res: Response) => {
 
     const nonce = randomUUID();
     const email = `guest-${nonce}@guest.tsmeet.invalid`;
-    const passwordHash = await bcrypt.hash(randomUUID(), 4);
     const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, name',
-      [email, passwordHash, name]
+      `INSERT INTO users (email, password_hash, name, is_guest, guest_room_id)
+       VALUES ($1, $2, $3, 1, $4) RETURNING id, name`,
+      [email, unusableGuestPasswordHash, name, roomId]
     );
     const user = result.rows[0];
     const token = jwt.sign(

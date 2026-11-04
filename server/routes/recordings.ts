@@ -17,6 +17,11 @@ import {
 import { writeAuditLog } from '../services/audit';
 import { recordingFailures } from '../services/metrics';
 
+function recordingRetentionDays() {
+  const parsed = Number(process.env.RECORDING_RETENTION_DAYS);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 30;
+}
+
 async function currentRecordingSegment(sessionId: string) {
   const result = await pool.query<any>(
     `SELECT * FROM recording_segments
@@ -55,8 +60,13 @@ async function startRecordingSegment(roomId: string, sessionId: string) {
     [sessionId, segment, started.egressId, started.objectKey]
   );
   await pool.query('UPDATE recording_sessions SET egress_id = $2 WHERE id = $1', [sessionId, started.egressId]);
+  // recordingRetentionDays() returns a validated positive integer. It is
+  // inlined rather than bound because the MySQL prepared-statement protocol
+  // does not accept a placeholder inside INTERVAL ... DAY.
   await pool.query(
-    `UPDATE recordings SET object_key = COALESCE(object_key, $2), retention_until = DATE_ADD(NOW(), INTERVAL 30 DAY)
+    `UPDATE recordings
+     SET object_key = COALESCE(object_key, $2),
+         retention_until = DATE_ADD(NOW(), INTERVAL ${recordingRetentionDays()} DAY)
      WHERE id = $1`,
     [sessionId, started.objectKey]
   );
@@ -278,12 +288,24 @@ export function createUserRecordingRoutes(
 
   router.get('/', async (req: Request, res: Response) => {
     try {
+      // segment_count/total_size_bytes let a client offer downloads for
+      // Egress recordings, whose rows never populate video_path.
       const result = await pool.query(
         `SELECT
            r.*,
-           rooms.title AS room_title
+           rooms.title AS room_title,
+           COALESCE(seg.segment_count, 0) AS segment_count,
+           COALESCE(seg.total_size_bytes, 0) AS total_size_bytes
          FROM recordings r
          LEFT JOIN rooms ON rooms.id = r.room_id
+         LEFT JOIN (
+           SELECT recording_id,
+                  COUNT(*) AS segment_count,
+                  SUM(COALESCE(size_bytes, 0)) AS total_size_bytes
+           FROM recording_segments
+           WHERE status = 'completed'
+           GROUP BY recording_id
+         ) seg ON seg.recording_id = r.id
          WHERE r.creator_id = $1
          ORDER BY r.started_at DESC`,
         [req.userId]
@@ -329,6 +351,40 @@ export function createUserRecordingRoutes(
     }
   });
 
+  // Every completed segment of a recording, with a short-lived download URL.
+  // A recording that was paused and resumed has more than one; without this
+  // endpoint everything after the first segment is unreachable.
+  router.get('/:recordingId/segments', async (req: Request, res: Response) => {
+    try {
+      const ownedRecording = await getOwnedRecording(String(req.userId), req.params.recordingId);
+      if (ownedRecording.error) {
+        return res.status(ownedRecording.error.status).json(ownedRecording.error.body);
+      }
+
+      const segments = await pool.query<any>(
+        `SELECT segment_index, object_key, size_bytes, completed_at
+         FROM recording_segments
+         WHERE recording_id = $1 AND status = 'completed' AND object_key IS NOT NULL
+         ORDER BY segment_index ASC`,
+        [req.params.recordingId]
+      );
+
+      const parts = await Promise.all(
+        segments.rows.map(async (segment) => ({
+          segmentIndex: Number(segment.segment_index),
+          sizeBytes: segment.size_bytes === null ? null : Number(segment.size_bytes),
+          completedAt: segment.completed_at,
+          url: await createRecordingDownloadUrl(String(segment.object_key)),
+        }))
+      );
+
+      return res.json({ recordingId: req.params.recordingId, segments: parts });
+    } catch (error) {
+      console.error('List recording segments error:', error);
+      return res.status(500).json({ error: 'Failed to load recording segments' });
+    }
+  });
+
   router.get('/:recordingId/:kind(video|audio)', async (req: Request, res: Response) => {
     try {
       const { recordingId, kind } = req.params;
@@ -338,9 +394,33 @@ export function createUserRecordingRoutes(
       }
 
       const row = ownedRecording.recording;
-      if (row.object_key && kind === 'video') {
-        const url = await createRecordingDownloadUrl(String(row.object_key));
-        return res.redirect(302, url);
+      if (kind === 'video') {
+        // A paused-and-resumed recording has several segments. Default to the
+        // first completed one and let ?segment=N reach the rest; recordings.
+        // object_key only ever points at segment 0.
+        const requested = req.query.segment;
+        const requestedIndex =
+          typeof requested === 'string' && /^\d+$/.test(requested) ? Number(requested) : null;
+        const segment = await pool.query<any>(
+          requestedIndex === null
+            ? `SELECT object_key FROM recording_segments
+               WHERE recording_id = $1 AND status = 'completed' AND object_key IS NOT NULL
+               ORDER BY segment_index ASC LIMIT 1`
+            : `SELECT object_key FROM recording_segments
+               WHERE recording_id = $1 AND status = 'completed' AND object_key IS NOT NULL
+                 AND segment_index = $2
+               LIMIT 1`,
+          requestedIndex === null ? [recordingId] : [recordingId, requestedIndex]
+        );
+
+        const objectKey = segment.rows[0]?.object_key || (requestedIndex === null ? row.object_key : null);
+        if (objectKey) {
+          const url = await createRecordingDownloadUrl(String(objectKey));
+          return res.redirect(302, url);
+        }
+        if (requestedIndex !== null) {
+          return res.status(404).json({ error: `Segment ${requestedIndex} is not available` });
+        }
       }
       const relativePath = kind === 'video' ? row.video_path : row.audio_path;
       const mimeType = kind === 'video' ? row.mime_type_video : row.mime_type_audio;

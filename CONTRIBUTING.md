@@ -95,7 +95,9 @@ For meeting UI changes, manually test with two browser profiles:
 - LiveKit SFU is the default media provider. Do not add browser-to-browser mesh
   connections to normal rooms.
 - Browser authentication uses the HttpOnly `tsmeet_session` cookie and the
-  same-origin Next.js `/api` proxy. Do not restore JWTs in localStorage.
+  same-origin Next.js `/api` proxy. Do not add new `localStorage` token reads —
+  the dashboard and calendar pages still have them and are being migrated to the
+  cookie, so new code must not add more.
 - Never expose `JWT_SECRET`, `LIVEKIT_API_SECRET`, Redis passwords, recorder
   tokens, or MinIO credentials to browser code or logs.
 - Socket.IO is for application events and moderation; LiveKit transports media.

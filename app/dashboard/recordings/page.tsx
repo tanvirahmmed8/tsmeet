@@ -19,6 +19,17 @@ interface Recording {
   completed_at?: string | null;
   video_path?: string | null;
   audio_path?: string | null;
+  // Egress recordings store parts in object storage and leave video_path null.
+  segment_count?: number | null;
+  total_size_bytes?: number | null;
+}
+
+function formatBytes(value?: number | null) {
+  const bytes = Number(value || 0);
+  if (!bytes) return null;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
 function formatDate(value?: string | null) {
@@ -93,10 +104,15 @@ export default function RecordingsPage() {
     }
   };
 
-  const downloadRecording = async (recordingId: string, kind: 'video' | 'audio') => {
+  const downloadRecording = async (
+    recordingId: string,
+    kind: 'video' | 'audio',
+    segmentIndex?: number
+  ) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`/api/recordings/${recordingId}/${kind}`, {
+      const query = segmentIndex === undefined ? '' : `?segment=${segmentIndex}`;
+      const res = await fetch(`/api/recordings/${recordingId}/${kind}${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -109,7 +125,10 @@ export default function RecordingsPage() {
       const blob = await res.blob();
       const disposition = res.headers.get('content-disposition') || '';
       const fileNameMatch = disposition.match(/filename="([^"]+)"/i);
-      const fileName = fileNameMatch?.[1] || `${recordingId}-${kind}.webm`;
+      const fallbackExtension = kind === 'video' ? 'mp4' : 'webm';
+      const fileName =
+        fileNameMatch?.[1] ||
+        `${recordingId}-${kind}${segmentIndex === undefined ? '' : `-part${segmentIndex + 1}`}.${fallbackExtension}`;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -218,7 +237,7 @@ export default function RecordingsPage() {
                       Server-saved recordings, ready for download.
                     </h2>
                     <p className="mt-3 max-w-xl text-sm leading-6 text-foreground/62 md:text-base">
-                      Recorder workers publish video and audio files here after sessions complete. Use this page as the single archive for meeting output.
+                      Meetings recorded on the server are archived here. Use this page as the single archive for meeting output.
                     </p>
                   </div>
 
@@ -280,7 +299,7 @@ export default function RecordingsPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/90">Archive rules</p>
                   <h3 className="mt-2 text-2xl font-semibold text-foreground">How files appear</h3>
                   <p className="mt-2 text-sm leading-6 text-foreground/62">
-                    Recordings show up here after the recorder worker uploads artifacts and marks the session complete.
+                    Recordings appear here once the server finishes writing them and the session is marked complete.
                   </p>
                 </div>
 
@@ -347,14 +366,19 @@ export default function RecordingsPage() {
                   <Disc3 className="mx-auto mb-4 h-10 w-10 text-foreground/25" />
                   <p className="text-base font-medium text-foreground">No recordings match this view</p>
                   <p className="mt-2 text-sm text-foreground/55">
-                    Adjust the search or status filter, or wait for the recorder worker to finish processing sessions.
+                    Adjust the search or status filter, or wait for an in-progress recording to finish.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {pagedRecordings.map((recording) => {
-                    const canDownloadVideo = recording.status === 'ready' && Boolean(recording.video_path);
+                    const segmentCount = Number(recording.segment_count || 0);
+                    // Egress recordings expose parts through recording_segments;
+                    // older local-disk recordings use video_path.
+                    const canDownloadVideo =
+                      recording.status === 'ready' && (segmentCount > 0 || Boolean(recording.video_path));
                     const canDownloadAudio = recording.status === 'ready' && Boolean(recording.audio_path);
+                    const totalSize = formatBytes(recording.total_size_bytes);
 
                     return (
                       <div
@@ -370,7 +394,29 @@ export default function RecordingsPage() {
                               <span>Started: {formatDate(recording.started_at)}</span>
                               <span>Completed: {formatDate(recording.completed_at)}</span>
                               <span>ID: {recording.id.slice(0, 8)}</span>
+                              {segmentCount > 1 ? <span>{segmentCount} parts</span> : null}
+                              {totalSize ? <span>{totalSize}</span> : null}
                             </div>
+
+                            {segmentCount > 1 ? (
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-foreground/55">
+                                  Recording was paused, so it is stored in {segmentCount} parts:
+                                </span>
+                                {Array.from({ length: segmentCount }, (_, index) => (
+                                  <Button
+                                    key={index}
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 rounded-xl border-primary/15 bg-background/82 text-xs"
+                                    onClick={() => downloadRecording(recording.id, 'video', index)}
+                                  >
+                                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                                    Part {index + 1}
+                                  </Button>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">

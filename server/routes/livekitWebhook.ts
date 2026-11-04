@@ -79,8 +79,13 @@ export async function receiveLiveKitWebhook(req: Request, res: Response) {
         [roomId]
       );
     } else if (roomId && event.event === 'room_finished') {
+      // LiveKit closes an idle room after empty_timeout. That means "no media
+      // session is currently open", not "the host ended this meeting", so it
+      // must not set ended_at -- doing so permanently kills a reusable meeting
+      // link after everyone steps away for a few minutes. Only an explicit
+      // end-meeting sets ended_at.
       await pool.query(
-        'UPDATE rooms SET livekit_finished_at = NOW(), ended_at = COALESCE(ended_at, NOW()) WHERE id = $1',
+        'UPDATE rooms SET livekit_finished_at = NOW() WHERE id = $1',
         [roomId]
       );
     } else if (roomId && identity?.startsWith('user:')) {

@@ -367,12 +367,42 @@ Archived recordings owned by the caller, newest first, joined with the room titl
     "status": "ready",
     "started_at": "2026-06-03T12:00:00.000Z",
     "completed_at": "2026-06-03T12:45:00.000Z",
-    "object_key": "recordings/<uuid>.mp4",
+    "object_key": "rooms/<roomId>/<sessionId>/segment-0000.mp4",
+    "segment_count": 2,
+    "total_size_bytes": 242343936,
     "video_path": null,
     "audio_path": null
   }
 ]
 ```
+
+> **Use `segment_count`, not `video_path`, to decide whether a download is
+> available.** Egress recordings live in object storage and leave `video_path`
+> null; only legacy local-disk recordings populate it. `object_key` points at the
+> first segment only — call the segments endpoint below for the rest.
+
+### `GET /api/recordings/:recordingId/segments`
+
+Every completed segment of a recording, each with a short-lived presigned URL.
+A recording that was paused and resumed has more than one; this is how you reach
+all of them.
+
+```json
+{
+  "recordingId": "<uuid>",
+  "segments": [
+    {
+      "segmentIndex": 0,
+      "sizeBytes": 154238976,
+      "completedAt": "2026-06-03T12:20:00.000Z",
+      "url": "https://storage.example.com/...<presigned>"
+    },
+    { "segmentIndex": 1, "sizeBytes": 88104960, "completedAt": "2026-06-03T12:45:00.000Z", "url": "..." }
+  ]
+}
+```
+
+Owner only. Returns an empty `segments` array when nothing has completed yet.
 
 ### `GET /api/recordings/:recordingId/video` · `GET /api/recordings/:recordingId/audio`
 
@@ -382,6 +412,13 @@ Two delivery paths, depending on where the artifact lives:
   URL. The bucket itself stays private.
 - **Local disk** (development): streams the file with `Content-Disposition:
   attachment`.
+
+**Query parameters** (video only):
+
+| Parameter | Effect |
+|---|---|
+| *(none)* | Redirects to the **first completed segment** |
+| `?segment=N` | Redirects to segment `N`; `404` if that segment is not available |
 
 `404` if that artifact kind was never produced; `403` if you do not own it.
 
@@ -781,7 +818,11 @@ preserving the `tsmeet_session` cookie and disabling caching.
 Why this layer exists:
 
 - The session cookie stays **HttpOnly and same-origin**. No JWT touches
-  `localStorage` on the LiveKit path.
+  `localStorage` on the meeting and media path.
+
+  The dashboard and calendar pages have not been migrated yet: they read a JWT
+  from `localStorage` and send `Authorization: Bearer`. The middleware accepts
+  both, preferring the cookie.
 - The Express origin does not need permissive CORS for browsers.
 - The backend URL is server-side configuration (`BACKEND_URL`), not a public
   build-time value.

@@ -224,6 +224,17 @@ export const initializeDatabase = async () => {
         FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+    // Guest identities are disposable: flagged so they can be purged once the
+    // meeting they were minted for is over. Backfilled from the reserved
+    // guest email domain for rows created before this column existed.
+    await addColumnIfMissing('users', 'is_guest', 'TINYINT(1) NOT NULL DEFAULT 0');
+    await addColumnIfMissing('users', 'guest_room_id', 'CHAR(36) NULL');
+    await pool.query(
+      `UPDATE users SET is_guest = 1
+       WHERE is_guest = 0 AND email LIKE '%@guest.tsmeet.invalid'`
+    );
+    await createIndexIfMissing('users', 'idx_users_is_guest', 'is_guest');
+
     await addColumnIfMissing('rooms', 'password_hash', 'VARCHAR(255) NULL');
     await addColumnIfMissing('rooms', 'livekit_started_at', 'DATETIME NULL');
     await addColumnIfMissing('rooms', 'livekit_finished_at', 'DATETIME NULL');

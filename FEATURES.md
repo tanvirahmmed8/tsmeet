@@ -113,10 +113,12 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Auto-record prompt from a calendar | Available | Prompts the host; never silent |
 | Private recording archive | Optional | Owner-only listing |
 | Short-lived presigned download URLs | Optional | Bucket stays private |
+| Per-segment download for paused recordings | Optional | Each part is individually retrievable |
 | Recording deletion | Optional | Removes rows, objects, and local files |
 | Storage quota enforcement | Optional | `507` when exhausted |
 | Session recovery after backend restart | Available | Unfinished sessions rehydrated at startup |
-| Retention configuration | Optional | `RECORDING_RETENTION_DAYS` |
+| Retention configuration | Optional | `RECORDING_RETENTION_DAYS`, default 30 |
+| Guest identity cleanup | Available | `GUEST_RETENTION_DAYS`, default 7 |
 
 Recording is **off by default** because compositing is CPU-intensive. Enable it
 per [docs/OPTIONAL_DOCKER_PROFILES.md](docs/OPTIONAL_DOCKER_PROFILES.md).

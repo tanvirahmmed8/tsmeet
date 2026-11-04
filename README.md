@@ -175,12 +175,17 @@ variables and smoke tests: [SETUP_GUIDE.md](SETUP_GUIDE.md).
 
 - Browser login uses an HttpOnly `tsmeet_session` cookie
 - Authenticated browser REST calls go through same-origin Next.js `/api` proxy routes
-- JWT and LiveKit API secrets stay server-side; JWTs are not stored in `localStorage`
+- JWT and LiveKit API secrets stay server-side; the browser never receives them
+- The meeting path is cookie-only — no token is read from `localStorage` to join media
 - LiveKit join tokens live for five minutes and are only issued after waiting-room approval
 - Roles are derived from database state — a client cannot claim to be host
 - Media is encrypted in transit with WebRTC DTLS-SRTP
 - Passwords are bcrypt-hashed; every database query is parameterised
 - Moderation and recording actions are written to an audit log
+
+> **Known gap.** The dashboard and calendar pages still read a JWT from
+> `localStorage` and send it as a bearer token; only the meeting and media path
+> is cookie-only. Migrating those pages to the cookie is tracked work.
 
 Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 
