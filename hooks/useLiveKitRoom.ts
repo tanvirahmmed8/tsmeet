@@ -82,6 +82,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const approvedRef = useRef(false);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean; roomPassword?: string; userData?: any } | null>(null);
   const signalingParticipantsRef = useRef<Map<string, SignalingParticipant>>(new Map());
+  const hasSignalingSnapshotRef = useRef(false);
   const qualityOverridesRef = useRef<Map<string, VideoQuality | 'off'>>(new Map());
   const backgroundProcessorRef = useRef<BackgroundProcessorWrapper | null>(null);
   const previewAudioRef = useRef<LocalAudioTrack | null>(null);
@@ -140,7 +141,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     const room = roomRef.current;
     const roster = mergeMeetingParticipants(
       Array.from(signalingParticipantsRef.current.values()),
-      Array.from(room?.remoteParticipants.values() || []), userId
+      Array.from(room?.remoteParticipants.values() || []), userId, hasSignalingSnapshotRef.current
     );
     setPeers(roster.map((member) => {
       const participant = member.media;
@@ -548,6 +549,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     setLocalStream(null);
     setPeers([]);
     signalingParticipantsRef.current.clear();
+    hasSignalingSnapshotRef.current = false;
     setIsCameraOn(false);
     setIsMicOn(false);
     setIsScreenSharing(false);
@@ -594,6 +596,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     socket.on('join-request', (request: JoinRequest) => setPendingRequests((items) =>
       items.some((item) => item.socketId === request.socketId) ? items : [...items, request]));
     const updateParticipants = (participants: SignalingParticipant[]) => {
+      hasSignalingSnapshotRef.current = true;
       signalingParticipantsRef.current = new Map(participants.map((item) => [item.socketId, item]));
       syncRemoteParticipants();
     };

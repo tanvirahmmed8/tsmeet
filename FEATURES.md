@@ -30,7 +30,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | In-meeting chat | Available | Text chat over Socket.IO |
 | Hand raising | Available | With host visibility |
 | Participant status indicators | Available | Mute, camera, hand, host badges |
-| Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated |
+| Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated. After a server roster snapshot, stale media cannot add departed/removed attendees back to the count |
 | Network quality indicator | Available | Shown in the meeting header |
 | Responsive mobile layout | Available | Verified down to 320 px |
 

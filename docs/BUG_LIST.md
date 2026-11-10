@@ -19,6 +19,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
 ## iPhone Safari — reported bugs
 
 - [ ] **BUG-01 — Participant count ১ দেখায়**
+  - Local progress (2026-11-10): authoritative signaling snapshot দিয়ে stale SFU attendee পুনরায় count হওয়া আটকানো হয়েছে; 11 session/roster regression tests pass। Original production/iPhone cause এবং real-client acceptance এখনও pending; [M02 evidence](PHASE_1_SAFARI.md#m02-follow-up--participant-count-2026-11-10)।
   - Report: একাধিক participant থাকা অবস্থায় count ১ দেখাচ্ছে বলে রিপোর্ট করা হয়েছে; পরীক্ষার প্রকৃত participant সংখ্যা নিশ্চিত করতে হবে।
   - Expected: admitted participant-দের join/leave অনুযায়ী host-সহ count সব window-তে update হবে। Waiting room-এর count আলাদা থাকবে।
   - Verify: host ও guest দিয়ে join, admit, leave এবং reconnect করে participant list ও count মিলিয়ে দেখা।

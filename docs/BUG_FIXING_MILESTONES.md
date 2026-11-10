@@ -61,18 +61,18 @@ Full AI noise cancellation, নতুন hardware provisioning এবং বড় 
 
 ### M01 — BUG-03: Unexpected logout
 
-Status: Local changes prepared (2026-11-09); production/iPhone verification pending. Estimate: **7–13 h**. Evidence and release instructions: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md).
+Status: Step 2 local fix and automated checks complete (confirmed 2026-11-10); Step 1 production/iPhone verification and Step 3 deployment/retest pending. M01 remains open. Estimate: **7–13 h**. Evidence and release instructions: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md).
 
 - [ ] **Step 1 — Verify (2–4 h):** Safari-তে sign-in, refresh, background/foreground ও reconnect reproduce; account logout বনাম meeting disconnect আলাদা করা। Local-এ না হলে server auth response status, cookie attributes, proxy forwarding ও session expiry পরীক্ষা; token/cookie value সংগ্রহ নয়। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–6 h):** Confirmed cause অনুযায়ী session/proxy/reconnect handling ঠিক করা; legitimate expiry ও authorization checks বজায় রাখা। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (3–6 h):** Local session/proxy fixes implemented: backend-verified cookie থেকে identity restore, valid account/same-room guest cookie preserve, verification outage-এ retry feedback এবং legitimate expiry/authorization checks বজায় রাখা। `pnpm check` passed, including 9 Safari session/roster regression tests; production/iPhone root-cause confirmation ও acceptance এখনও pending। Evidence: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md).
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Valid session-এ unexpected logout নেই; expired session-এ সঠিক message; iPhone Safari ও laptop দুটোতেই পরীক্ষা। Result ও commit reference record হলে step complete।
 
 ### M02 — BUG-01: Participant count
 
-Status: Local changes prepared (2026-11-09); production/iPhone verification pending. Estimate: **4.5–8.5 h**. Evidence: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md).
+Status: Step 2 local fix and automated checks complete (2026-11-10); original production/iPhone reproduction and deployment/retest pending. M02 remains open. Estimate: **4.5–8.5 h**. Evidence: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md#m02-follow-up--participant-count-2026-11-10).
 
 - [ ] **Step 1 — Verify (1–2 h):** ২–৩টি client দিয়ে join/admit/leave/reconnect করে local count তুলনা। Server-only হলে Socket.IO connection, room membership, deployed build এবং backend instance count যাচাই। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h):** Duplicate/stale participant state বা missed event-এর প্রমাণিত কারণ ঠিক করা; waiting room ও admitted participant count আলাদা রাখা। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (2–4 h):** Signaling/media roster merge বজায় রেখে authoritative server snapshot-এর পরে stale SFU entry দিয়ে departed/removed attendee পুনরায় count হওয়া আটকানো হয়েছে। Media-off admitted users ও reconnect identity deduplication বজায় আছে। `pnpm check` passed: lint (0 errors, 10 existing warnings), typecheck, existing tests, 11 Safari/session/roster tests, dependency tests এবং production build। Real-client/server acceptance এখনও pending।
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: সব client-এ host-সহ admitted count মেলে; waiting guest ও reconnect duplicate হিসেবে গণনা হয় না। Result ও commit reference record হলে step complete।
 
 ### M03 — BUG-02: Safari microphone mute/unmute

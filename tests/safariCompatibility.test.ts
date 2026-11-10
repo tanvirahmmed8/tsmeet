@@ -32,6 +32,27 @@ test('media-only arrival is visible until signaling catches up; removed attendee
 });
 
 const origin = 'https://meet.example.com';
+test('authoritative roster excludes pending users and stale media after leave or removal', () => {
+  const admitted = [{ socketId: 'host', userId: '1' }, { socketId: 'guest', userId: '2' }];
+  const media = [{ identity: 'user:2' }, { identity: 'user:3' }, { identity: 'EG_recorder' }];
+  assert.equal(mergeMeetingParticipants(admitted, media, '1', true).length + 1, 2);
+  assert.equal(mergeMeetingParticipants([admitted[0]], media, '1', true).length + 1, 1);
+  assert.equal(mergeMeetingParticipants([], media, '1', true).length, 0);
+});
+
+test('three admitted clients agree on count without media, across reconnect and leave snapshots', () => {
+  const members = [1, 2, 3].map((id) => ({ socketId: `socket-${id}`, userId: String(id) }));
+  for (const self of members) {
+    assert.equal(mergeMeetingParticipants(members, [], self.userId, true).length + 1, 3);
+  }
+  const reconnected = [members[0], { ...members[1], socketId: 'replacement-2' }, members[2]];
+  const media = [{ identity: 'user:2' }, { identity: 'user:3' }];
+  const roster = mergeMeetingParticipants(reconnected, media, '1', true);
+  assert.equal(roster.length + 1, 3);
+  assert.equal(roster.find((member) => member.userId === '2')?.peerId, 'replacement-2');
+  assert.equal(mergeMeetingParticipants(reconnected.slice(0, 2), media, '1', true).length + 1, 2);
+});
+
 const roomId = '5ce29459-43e0-49d3-b050-d6d22092319e';
 
 async function withBackend(

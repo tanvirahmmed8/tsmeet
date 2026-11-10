@@ -12,7 +12,7 @@ export interface MediaMember {
 // Admission/presence must remain visible even when media permissions fail or
 // the SFU has not connected yet. Media-only arrivals fill the signaling gap.
 export function mergeMeetingParticipants<T extends MediaMember>(
-  signaling: SignalingMember[], media: T[], selfUserId: string
+  signaling: SignalingMember[], media: T[], selfUserId: string, hasSignalingSnapshot = false
 ) {
   const roster = new Map<string, { peerId: string; userId: string; name: string; media?: T }>();
   for (const member of signaling) {
@@ -26,6 +26,9 @@ export function mergeMeetingParticipants<T extends MediaMember>(
     const userId = participant.identity.slice(5);
     if (userId === selfUserId) continue;
     const member = roster.get(userId);
+    // After admission/presence is known, stale SFU tracks must not resurrect
+    // someone who has left or been removed from the server's attendee list.
+    if (hasSignalingSnapshot && !member) continue;
     roster.set(userId, {
       peerId: member?.peerId || participant.identity, userId,
       name: member?.name && member.name !== 'Guest' ? member.name : participant.name || member?.name || 'Guest',

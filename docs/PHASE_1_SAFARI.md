@@ -27,6 +27,36 @@ routes and socket payload schemas are unchanged. See [API.md](../API.md).
 
 ## Local checks
 
+### M02 follow-up — participant count (2026-11-10)
+
+Source review confirmed a local roster ordering gap: merging every SFU identity
+back into an already received signaling snapshot could retain a departed or
+removed attendee until LiveKit delivered its disconnect. This is not proof of
+the original production Safari report's root cause.
+
+The hook now tracks whether an authoritative signaling snapshot has arrived.
+Before the first snapshot, media-only arrivals remain a fallback. After it,
+only admitted signaling members contribute to the remote roster; matching SFU
+entries supply tracks, not additional attendees. Cleanup resets that snapshot
+state. No REST/socket payload, backend authorization, or server configuration
+changed.
+
+Two regression cases cover stale media after leave/removal, empty snapshots,
+excluded non-admitted identities/recorders, three-client media-off counts, and
+replacement sockets on reconnect. `pnpm test:safari` passes all 11 tests.
+These are automated roster/session tests, not a browser or physical Safari test.
+Full `pnpm check` also passed on 2026-11-10 after this change: lint (0 errors,
+10 existing warnings), frontend/backend typecheck, all regression suites and
+the production build. The middleware naming deprecation warning remains.
+
+Release gate: test two/three real clients (including iPhone Safari), admit a
+waiting guest, leave/remove one attendee, then reconnect with media off. Compare
+toolbar count and participant rows on every client. Waiting guests and hidden
+recorders must not count; host must count exactly once. Deployment is pending;
+use the service inspection and native deployment process below. The M02 change
+itself requires a frontend rebuild, not a backend/LiveKit restart. Any concurrent
+dependency/backend update needs its own deployment review.
+
 Final `pnpm.cmd check` passed on 2026-11-09: lint (0 errors, 10 warnings),
 frontend/backend typecheck, the existing test suite, 9 new session/roster
 regression tests, and production build. The build still warns about the existing
