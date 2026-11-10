@@ -17,7 +17,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Feature | Status | Notes |
 |---|---|---|
 | Camera and microphone preview before joining | Available | Choose devices before entering |
-| Safari capture preferences | Implemented; device retest pending | Pre-join capture uses explicit buttons; joining preserves mute/camera choices; host approval requires a participant tap to unmute |
+| Safari capture preferences | Implemented; device retest pending | Pre-join capture uses explicit buttons; joining preserves mute/camera choices; host approval requires a participant tap to unmute. Lost microphone tracks require a fresh tap; pending unmute is reversed if host mute or leave invalidates it |
 | Input/output device selection | Available | Microphone, camera, and speaker pickers |
 | Gallery layout | Available | Grid of participants |
 | Active-speaker layout | Available | Current speaker on stage |

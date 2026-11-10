@@ -77,10 +77,10 @@ Status: Step 2 local fix and automated checks complete (2026-11-10); original pr
 
 ### M03 — BUG-02: Safari microphone mute/unmute
 
-Status: Local changes prepared (2026-11-09); real audio/iPhone verification pending. Estimate: **7–12 h**. Evidence: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md).
+Status: Step 2 local lifecycle fix and automated checks complete (2026-11-10); Step 1 real iPhone/audio verification and Step 3 deployment/retest pending. M03 remains open. Estimate: **7–12 h**. Evidence: [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md#m03-follow-up--microphone-lifecycle-2026-11-10).
 
 - [ ] **Step 1 — Verify (2–3 h):** Real iPhone Safari ও laptop listener দিয়ে mute/unmute reproduce; permissions, audio track publication এবং UI state পরীক্ষা। Server logs শুধু publish/moderation mismatch হলে প্রয়োজন। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–6 h):** Confirmed track lifecycle, gesture/permission অথবা state synchronization issue ঠিক করা; mute যেন সত্যিই audio transmission বন্ধ করে। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (3–6 h):** Local lifecycle gaps fixed: pending unmute-এর পরে host/session authority recheck ও প্রয়োজনে mute, preview publication failure cleanup, ended-track indicator এবং device-loss fresh-tap recovery। `pnpm check` passed: lint (0 errors, 10 existing warnings), typecheck, all tests including 15 Safari/session/roster/microphone tests, production build। Actual iPhone-to-laptop audio ও production acceptance এখনও pending; original report-এর root cause independently confirmed নয়।
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: অন্য device-এ muted audio শোনা যায় না; unmute-এ ফেরে; repeated toggle ও background থেকে ফিরে পরীক্ষা। Result ও commit reference record হলে step complete।
 
 ### M04 — BUG-04: Laptop fullscreen controls

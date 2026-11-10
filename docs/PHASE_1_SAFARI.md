@@ -27,6 +27,37 @@ routes and socket payload schemas are unchanged. See [API.md](../API.md).
 
 ## Local checks
 
+### M03 follow-up — microphone lifecycle (2026-11-10)
+
+Source review identified two local lifecycle gaps: device-change recovery used
+captured UI state without checking current host mute, and an asynchronous
+toggle could finish after leave or host mute. Installed LiveKit source confirms
+capture tracks already carry the microphone source; no SDK source override was
+needed. These findings do not independently establish the original iPhone
+production failure's cause.
+
+The mic toggle now checks current session generation and host permission after
+the SDK operation; disallowed pending unmute is reversed before reporting
+success. Preview publication failure/cancellation stops its capture track.
+Ended microphone tracks no longer show as enabled in local stream sync.
+Device-change recovery does not start microphone capture automatically: a lost
+track gives a fresh-tap prompt, while host-muted and in-flight captures are left
+alone. Host unmute approval still only unlocks the participant's button.
+
+Four async regression tests cover SDK mute/unmute completion, host mute during
+capture, leave during capture, and permission failure. `pnpm test:safari` passes
+all 15 session/roster/microphone tests. Full `pnpm check` passed: lint (0 errors,
+10 existing warnings), frontend/backend typecheck, all test suites and production
+build. The middleware naming deprecation warning remains. Tests use a controlled
+SDK substitute; physical audio and iOS lifecycle behaviour are not verified.
+
+Acceptance remains pending: an iPhone participant and laptop listener must
+verify silent mute, audible unmute, rapid taps, denied permission/retry, device
+loss and fresh tap, host-mute during capture, approval without automatic
+capture, background/foreground, and leaving during a permission prompt. Record
+iOS/Safari version and deployed build. This M03 code change needs a frontend
+rebuild; backend/socket contracts and LiveKit configuration are unchanged.
+
 ### M02 follow-up — participant count (2026-11-10)
 
 Source review confirmed a local roster ordering gap: merging every SFU identity

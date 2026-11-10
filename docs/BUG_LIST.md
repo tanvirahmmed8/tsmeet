@@ -25,6 +25,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
   - Verify: host ও guest দিয়ে join, admit, leave এবং reconnect করে participant list ও count মিলিয়ে দেখা।
 
 - [ ] **BUG-02 — Microphone mute/unmute কাজ করে না**
+  - Local progress (2026-11-10): pending unmute-এর পরে host/session authority recheck, lost track-এর fresh-tap recovery এবং preview cleanup যোগ হয়েছে। 15 session/roster/microphone tests pass; real iPhone-to-laptop audio acceptance pending। [M03 evidence](PHASE_1_SAFARI.md#m03-follow-up--microphone-lifecycle-2026-11-10)।
   - Report: Safari-তে microphone toggle কাজ করেনি।
   - Expected: mute করলে অন্য participant আর audio শুনবেন না; unmute করলে permission থাকা সাপেক্ষে audio ফিরবে এবং icon/status মিলবে।
   - Verify: অন্য device থেকে audio শুনে পরীক্ষা; শুধু button-এর icon বদলানোকে success ধরা যাবে না।

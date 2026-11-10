@@ -20,6 +20,7 @@ import { io, type Socket } from 'socket.io-client';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import { evaluateNetworkSample, type NetworkAdaptationState, type NetworkTier } from '@/lib/mediaNetworkPolicy';
 import { mergeMeetingParticipants } from '@/lib/meetingParticipants';
+import { setMicrophoneEnabledSafely } from '@/lib/microphoneOperation';
 
 type BackgroundMode = 'none' | 'blur' | 'image';
 type JoinStatus = 'idle' | 'pending' | 'approved' | 'denied' | 'password-required' | 'password-incorrect';
@@ -132,7 +133,8 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       setLocalStream(new MediaStream(tracks));
       return;
     }
-    setIsMicOn(local.isMicrophoneEnabled);
+    const microphone = local.getTrackPublication(Track.Source.Microphone)?.track;
+    setIsMicOn(Boolean(local.isMicrophoneEnabled && microphone?.mediaStreamTrack.readyState === 'live'));
     setIsCameraOn(local.isCameraEnabled);
     setLocalStream(mediaStreamForParticipant(local) || new MediaStream());
   }, []);
@@ -520,8 +522,14 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       const participant = roomRef.current?.localParticipant;
       if (!participant || !approvedRef.current) return;
       try {
-        if (isMicOn && !participant.getTrackPublication(Track.Source.Microphone)?.track) {
-          await participant.setMicrophoneEnabled(true);
+        const microphone = participant.getTrackPublication(Track.Source.Microphone)?.track;
+        if (microphoneWantedRef.current && !hostMutedRef.current && !microphoneBusyRef.current &&
+          (!microphone || microphone.mediaStreamTrack.readyState === 'ended')) {
+          // Do not recapture from a device event: Safari may require a fresh tap.
+          microphoneWantedRef.current = false;
+          setIsMicOn(false);
+          setError('Microphone disconnected. Tap the microphone to allow access and reconnect.');
+          return;
         }
         if (isCameraOn && !participant.getTrackPublication(Track.Source.Camera)?.track) {
           await participant.setCameraEnabled(true);
@@ -710,23 +718,35 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     if (hostMutedRef.current || microphoneBusyRef.current) return;
     microphoneBusyRef.current = true;
     const participant = roomRef.current?.state === ConnectionState.Connected ? roomRef.current.localParticipant : null;
-    const enabled = participant ? !participant.isMicrophoneEnabled : !microphoneWantedRef.current;
+    const microphone = participant?.getTrackPublication(Track.Source.Microphone)?.track;
+    const enabled = participant
+      ? !(participant.isMicrophoneEnabled && microphone && microphone.mediaStreamTrack.readyState !== 'ended')
+      : !microphoneWantedRef.current;
     const generation = mediaGenerationRef.current;
+    const isCurrentAndAllowed = () => generation === mediaGenerationRef.current && !hostMutedRef.current;
     try {
-      if (participant) await participant.setMicrophoneEnabled(enabled);
+      if (participant) {
+        if (!await setMicrophoneEnabledSafely(participant, enabled, isCurrentAndAllowed)) return;
+      }
       else if (enabled) {
         const track = await createLocalAudioTrack();
         if (generation !== mediaGenerationRef.current || hostMutedRef.current) { track.stop(); return; }
         if (roomRef.current?.state === ConnectionState.Connected) {
-          await roomRef.current.localParticipant.publishTrack(track);
-          if (hostMutedRef.current) { await track.mute(); return; }
+          try { await roomRef.current.localParticipant.publishTrack(track); }
+          catch (cause) { track.stop(); throw cause; }
+          if (!isCurrentAndAllowed()) { await track.mute(); track.stop(); return; }
         } else previewAudioRef.current = track;
       } else { previewAudioRef.current?.stop(); previewAudioRef.current = null; }
-      if (hostMutedRef.current && participant) { await participant.setMicrophoneEnabled(false); return; }
+      if (!isCurrentAndAllowed()) return;
       microphoneWantedRef.current = enabled;
       setIsMicOn(enabled); syncLocalStream(participant || undefined); setError(null);
     }
-    catch { setError('Microphone access failed. Check permission or select another microphone.'); }
+    catch {
+      if (isCurrentAndAllowed()) {
+        syncLocalStream(participant || undefined);
+        setError('Microphone access failed. Check permission or select another microphone.');
+      }
+    }
     finally { microphoneBusyRef.current = false; }
   }, [syncLocalStream]);
   const toggleScreenShare = useCallback(async (includeDeviceAudio = false) => {

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { NextRequest } from 'next/server';
 import { mergeMeetingParticipants } from '../lib/meetingParticipants';
 import { getSessionUser } from '../lib/browserSession';
+import { setMicrophoneEnabledSafely } from '../lib/microphoneOperation';
 import { GET as session } from '../app/api/auth/session/route';
 import { POST as guest } from '../app/api/auth/guest/route';
 
@@ -32,6 +33,38 @@ test('media-only arrival is visible until signaling catches up; removed attendee
 });
 
 const origin = 'https://meet.example.com';
+test('microphone toggle awaits SDK mute/unmute before reporting completion', async () => {
+  const calls: boolean[] = [];
+  const participant = { setMicrophoneEnabled: async (enabled: boolean) => { calls.push(enabled); } };
+  assert.equal(await setMicrophoneEnabledSafely(participant, true, () => true), true);
+  assert.equal(await setMicrophoneEnabledSafely(participant, false, () => true), true);
+  assert.deepEqual(calls, [true, false]);
+});
+
+for (const reason of ['host mute', 'meeting leave']) {
+  test(`pending unmute is reversed when ${reason} happens during SDK capture`, async () => {
+    let allowed = true;
+    let finishCapture!: () => void;
+    const calls: boolean[] = [];
+    const capture = new Promise<void>((resolve) => { finishCapture = resolve; });
+    const participant = { setMicrophoneEnabled: async (enabled: boolean) => {
+      calls.push(enabled);
+      if (enabled) await capture;
+    } };
+    const pending = setMicrophoneEnabledSafely(participant, true, () => allowed);
+    assert.deepEqual(calls, [true]);
+    allowed = false;
+    finishCapture();
+    assert.equal(await pending, false);
+    assert.deepEqual(calls, [true, false]);
+  });
+}
+
+test('microphone permission/SDK failures propagate rather than reporting success', async () => {
+  const participant = { setMicrophoneEnabled: async () => { throw new Error('Permission denied'); } };
+  await assert.rejects(setMicrophoneEnabledSafely(participant, true, () => true), /Permission denied/);
+});
+
 test('authoritative roster excludes pending users and stale media after leave or removal', () => {
   const admitted = [{ socketId: 'host', userId: '1' }, { socketId: 'guest', userId: '2' }];
   const media = [{ identity: 'user:2' }, { identity: 'user:3' }, { identity: 'EG_recorder' }];
