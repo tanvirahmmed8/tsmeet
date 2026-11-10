@@ -231,6 +231,10 @@ Design points worth keeping:
   Do not assume one file per recording.
 - **The bucket stays private.** Downloads go through a `302` to a short-lived
   presigned URL after an ownership check. There is no public object.
+  The backend uses the AWS S3-compatible SDK with path-style addressing against
+  the configured `MINIO_ENDPOINT` / `MINIO_PUBLIC_ENDPOINT`; this does not require
+  an AWS account or move storage away from self-hosted MinIO. Deletion is batched
+  at 1,000 keys, and per-object failures prevent retention metadata removal.
 - **Quota is checked on start and on resume**, returning `507` with
   `RECORDING_STORAGE_FULL`.
 - **Sessions survive a restart.** Unfinished `recording_sessions` rows are

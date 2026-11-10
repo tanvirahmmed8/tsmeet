@@ -20,8 +20,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:safari
+      - run: pnpm test:dependencies
       - run: pnpm build
       - run: pnpm audit --audit-level high
+      - run: pnpm --dir server audit --audit-level high
+      - run: npm --prefix server audit --package-lock-only --audit-level high
 
   container-scan:
     runs-on: ubuntu-latest

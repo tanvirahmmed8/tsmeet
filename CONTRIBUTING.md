@@ -69,8 +69,24 @@ Run from the repository root:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:safari
+pnpm test:dependencies
 pnpm build
 ```
+
+`pnpm check` runs all of these in order. For dependency/security changes, also run:
+
+```bash
+pnpm audit --audit-level high
+pnpm --dir server audit --audit-level high
+npm --prefix server audit --package-lock-only --audit-level high
+```
+
+Keep both pnpm lockfiles and `server/package-lock.json` synchronized with their
+manifests: CI uses pnpm, while the backend Dockerfile uses `npm ci`.
+`test:dependencies` checks auth validation and form-resolver compatibility plus
+S3/MinIO URL signing, batched deletion, and health checks using a loopback fixture;
+it does not replace a real MinIO recording/download smoke test after deployment.
 
 For Docker or deployment changes, also validate Compose configuration:
 

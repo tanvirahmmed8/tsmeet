@@ -1,4 +1,5 @@
-import { Client } from 'minio';
+import { DeleteObjectsCommand, GetObjectCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { pool } from '../db';
 
 export class StorageQuotaExceededError extends Error {
@@ -24,24 +25,46 @@ function required(name: string) {
 
 function clientFor(endpointValue: string) {
   const endpoint = new URL(endpointValue);
-  return new Client({
-    endPoint: endpoint.hostname,
-    port: endpoint.port ? Number(endpoint.port) : endpoint.protocol === 'https:' ? 443 : 80,
-    useSSL: endpoint.protocol === 'https:',
+  return new S3Client({
+    endpoint: endpoint.origin,
+    forcePathStyle: true,
     region: process.env.MINIO_REGION || 'us-east-1',
-    accessKey: required('MINIO_ACCESS_KEY'),
-    secretKey: required('MINIO_SECRET_KEY'),
+    credentials: {
+      accessKeyId: required('MINIO_ACCESS_KEY'),
+      secretAccessKey: required('MINIO_SECRET_KEY'),
+    },
   });
 }
 
 export async function createRecordingDownloadUrl(objectKey: string, expiresSeconds = 300) {
   const endpoint = process.env.MINIO_PUBLIC_ENDPOINT || required('MINIO_ENDPOINT');
-  return clientFor(endpoint).presignedGetObject(required('MINIO_BUCKET'), objectKey, expiresSeconds);
+  const client = clientFor(endpoint);
+  try {
+    return await getSignedUrl(client, new GetObjectCommand({
+      Bucket: required('MINIO_BUCKET'), Key: objectKey,
+    }), { expiresIn: expiresSeconds });
+  } finally {
+    client.destroy();
+  }
 }
 
 export async function removeRecordingObjects(objectKeys: string[]) {
   if (objectKeys.length === 0) return;
-  await clientFor(required('MINIO_ENDPOINT')).removeObjects(required('MINIO_BUCKET'), objectKeys);
+  const client = clientFor(required('MINIO_ENDPOINT'));
+  try {
+    // S3 accepts at most 1,000 keys per request, including on MinIO.
+    for (let offset = 0; offset < objectKeys.length; offset += 1000) {
+      const result = await client.send(new DeleteObjectsCommand({
+        Bucket: required('MINIO_BUCKET'),
+        Delete: { Objects: objectKeys.slice(offset, offset + 1000).map((Key) => ({ Key })), Quiet: true },
+      }));
+      // A successful HTTP response can still contain individual deletion errors.
+      // Do not discard recording metadata when any storage deletion failed.
+      if (result.Errors?.length) throw new Error('Recording object deletion failed');
+    }
+  } finally {
+    client.destroy();
+  }
 }
 
 export async function enforceRecordingRetention() {
@@ -75,5 +98,14 @@ export async function assertStorageQuotaAvailable(creatorId: string) {
 }
 
 export async function checkObjectStorageHealth() {
-  return clientFor(required('MINIO_ENDPOINT')).bucketExists(required('MINIO_BUCKET'));
+  const client = clientFor(required('MINIO_ENDPOINT'));
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: required('MINIO_BUCKET') }));
+    return true;
+  } catch (error) {
+    if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return false;
+    throw error;
+  } finally {
+    client.destroy();
+  }
 }

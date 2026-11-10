@@ -2,23 +2,10 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
-import { z } from 'zod';
+import { registerSchema, loginSchema, guestSchema } from '../services/authValidation';
 import { randomUUID } from 'crypto';
 
 const router = Router();
-const registerSchema = z.object({
-  email: z.string().trim().email().max(191).transform((value) => value.toLowerCase()),
-  password: z.string().min(8).max(128),
-  name: z.string().trim().min(1).max(191),
-});
-const loginSchema = z.object({
-  email: z.string().trim().email().max(191).transform((value) => value.toLowerCase()),
-  password: z.string().min(1).max(128),
-});
-const guestSchema = z.object({
-  roomId: z.string().uuid(),
-  name: z.string().trim().min(1).max(100),
-});
 // Guest rows need a non-null password_hash but must never be sign-in-able.
 // Hashing once at startup keeps bcrypt.compare() well-defined (it simply fails)
 // without paying a hash on every guest join.
