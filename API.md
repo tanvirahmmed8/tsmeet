@@ -157,6 +157,25 @@ Requires `Authorization: Bearer <jwt>`. Returns `200` with the decoded payload,
 
 ---
 
+### `GET /api/auth/session` (Next.js only)
+
+Restores browser identity from the HttpOnly session cookie by asking backend
+`GET /api/auth/verify`. Returns `200` with `{ user: { id, name, email?, guest,
+roomId? } }`; IDs are strings. No token, `iat`, or `exp` is exposed. Guest
+`roomId` is returned only for room-scoped guests. Missing credentials return
+`401`, invalid/expired credentials `403`, and verification outages `503`.
+Responses are `Cache-Control: private, no-store`. This endpoint does not renew
+or extend session lifetime and is not mounted in Express.
+
+Browser `POST /api/auth/guest` verifies any existing session first. A valid
+account or same-room guest returns `200` with its existing user and no
+`Set-Cookie`, preserving the signed-in identity and existing guest approval.
+Otherwise the existing backend guest-creation contract applies (`201`, token
+removed from browser JSON, HttpOnly guest cookie set). Verification outages
+fail without replacing the cookie. A guest for another room can request a new
+room-scoped guest identity; it does not acquire access to the original room's
+privileges. Backend `/api/auth/guest` itself is unchanged.
+
 ## Rooms API
 
 Mounted at `/api/rooms`. **All routes require authentication.**
@@ -788,6 +807,12 @@ participants of that room before acting, and writes a `security_audit_logs` row.
 | `allow-unmute` | `{ roomId }` |
 | `unmute-denied` | `{ roomId }` |
 
+On the LiveKit browser path, `allow-unmute` clears the host mute restriction;
+the participant must tap the microphone to start capture. It does not silently
+start recording audio from a Socket.IO callback. On Socket.IO reconnect the
+client repeats `request-join`; the backend rechecks identity, room password,
+room status, and existing waiting-room approval.
+
 **Chat, device state, and lifecycle**
 
 | Event | Payload |
@@ -820,9 +845,10 @@ Why this layer exists:
 - The session cookie stays **HttpOnly and same-origin**. No JWT touches
   `localStorage` on the meeting and media path.
 
-  The dashboard and calendar pages have not been migrated yet: they read a JWT
-  from `localStorage` and send `Authorization: Bearer`. The middleware accepts
-  both, preferring the cookie.
+  Meeting, dashboard, and calendar pages restore identity through the
+  cookie-verified `/api/auth/session` route. Some historical request helpers
+  still send optional legacy bearer headers; the middleware prefers the
+  cookie. No browser JWT storage is required.
 - The Express origin does not need permissive CORS for browsers.
 - The backend URL is server-side configuration (`BACKEND_URL`), not a public
   build-time value.

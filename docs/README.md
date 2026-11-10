@@ -24,6 +24,10 @@ Start with the row that matches what you are trying to do.
 | [../ARCHITECTURE.md](../ARCHITECTURE.md) | Runtime topology, request paths, state ownership, data model, security model |
 | [../API.md](../API.md) | REST endpoints, the proxy layer, and the full Socket.IO contract |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Branching, testing checklist, review rules |
+| [BUG_LIST.md](BUG_LIST.md) | Reported meeting bugs, feature gaps, and retest checklist |
+| [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) | Three-step fix milestones, hourly estimates, deployment and retest gates |
+| [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md) | Safari findings, local changes, native server hand-off and real-device acceptance tests |
+| [CONVAY_COMPARISON.md](CONVAY_COMPARISON.md) | Public Convay feature research compared with TSMeet source, gaps, and unverified differences |
 | [adr/](adr/) | Architecture decision records — why things are the way they are |
 
 ## I want to deploy and operate TSMeet

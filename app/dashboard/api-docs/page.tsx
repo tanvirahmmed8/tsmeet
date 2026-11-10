@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { getSessionUser } from '@/lib/browserSession';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Copy } from 'lucide-react';
 import { UserSidebar, UserSidebarHeader } from '@/components/dashboard/user-sidebar';
@@ -16,12 +17,16 @@ export default function ApiDocsPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [copyState, setCopyState] = useState('');
+  const [sessionError, setSessionError] = useState('');
 
   useEffect(() => {
-    const raw = localStorage.getItem('user');
-    if (!raw) return void router.push('/auth/login');
-    try { setUser(JSON.parse(raw)); }
-    catch { localStorage.removeItem('user'); router.push('/auth/login'); }
+    let cancelled = false;
+    void getSessionUser().then((session) => {
+      if (cancelled) return;
+      if (!session || session.guest) { router.push('/auth/login'); return; }
+      setUser(session);
+    }).catch((cause) => { if (!cancelled) setSessionError(cause.message); });
+    return () => { cancelled = true; };
   }, [router]);
 
   const backend = useMemo(() => getBackendBaseUrl(), []);
@@ -38,7 +43,7 @@ export default function ApiDocsPage() {
     localStorage.removeItem('user');
     router.push('/');
   };
-  if (!user) return null;
+  if (!user) return <div role="status" className="p-6">{sessionError || 'Checking session…'}{sessionError && <Button onClick={() => window.location.reload()}>Retry</Button>}</div>;
 
   return (
     <UserSidebar user={user} onLogout={() => void logout()}>

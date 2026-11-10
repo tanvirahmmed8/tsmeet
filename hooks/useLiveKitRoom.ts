@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ConnectionState,
+  createLocalAudioTrack,
+  createLocalVideoTrack,
+  LocalAudioTrack,
   LocalVideoTrack,
   LocalParticipant,
   Participant,
@@ -16,6 +19,7 @@ import {
 import { io, type Socket } from 'socket.io-client';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import { evaluateNetworkSample, type NetworkAdaptationState, type NetworkTier } from '@/lib/mediaNetworkPolicy';
+import { mergeMeetingParticipants } from '@/lib/meetingParticipants';
 
 type BackgroundMode = 'none' | 'blur' | 'image';
 type JoinStatus = 'idle' | 'pending' | 'approved' | 'denied' | 'password-required' | 'password-incorrect';
@@ -80,6 +84,15 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const signalingParticipantsRef = useRef<Map<string, SignalingParticipant>>(new Map());
   const qualityOverridesRef = useRef<Map<string, VideoQuality | 'off'>>(new Map());
   const backgroundProcessorRef = useRef<BackgroundProcessorWrapper | null>(null);
+  const previewAudioRef = useRef<LocalAudioTrack | null>(null);
+  const previewVideoRef = useRef<LocalVideoTrack | null>(null);
+  const microphoneBusyRef = useRef(false);
+  const cameraBusyRef = useRef(false);
+  const microphoneWantedRef = useRef(false);
+  const cameraWantedRef = useRef(false);
+  const hostMutedRef = useRef(false);
+  const mediaGenerationRef = useRef(0);
+  const connectingRef = useRef(false);
   const inboundStatsRef = useRef<Map<string, { packetsReceived: number; packetsLost: number }>>(new Map());
   const outboundStatsRef = useRef<Map<string, { packetsReceived: number; packetsLost: number }>>(new Map());
   const networkAdaptationRef = useRef<NetworkAdaptationState>({ tier: 'excellent', candidateTier: null, candidateSamples: 0, healthySamples: 0 });
@@ -112,30 +125,35 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
 
   const syncLocalStream = useCallback((participant?: LocalParticipant) => {
     const local = participant || roomRef.current?.localParticipant;
-    if (!local) return setLocalStream(null);
+    if (!local || roomRef.current?.state === ConnectionState.Disconnected) {
+      const tracks = [previewAudioRef.current, previewVideoRef.current]
+        .filter((track) => track && !track.isMuted).map((track) => track!.mediaStreamTrack);
+      setLocalStream(new MediaStream(tracks));
+      return;
+    }
+    setIsMicOn(local.isMicrophoneEnabled);
+    setIsCameraOn(local.isCameraEnabled);
     setLocalStream(mediaStreamForParticipant(local) || new MediaStream());
   }, []);
 
   const syncRemoteParticipants = useCallback(() => {
     const room = roomRef.current;
-    if (!room) return setPeers([]);
-
-    const signalingByUser = new Map(
-      Array.from(signalingParticipantsRef.current.values()).map((entry) => [String(entry.userId), entry])
+    const roster = mergeMeetingParticipants(
+      Array.from(signalingParticipantsRef.current.values()),
+      Array.from(room?.remoteParticipants.values() || []), userId
     );
-    setPeers(Array.from(room.remoteParticipants.values()).map((participant) => {
-      const participantUserId = identityUserId(participant.identity);
-      const signaling = signalingByUser.get(participantUserId);
+    setPeers(roster.map((member) => {
+      const participant = member.media;
       return {
-        peerId: signaling?.socketId || participant.identity,
-        userId: participantUserId,
-        userData: { name: signaling?.userData?.name || participant.name || 'Guest' },
-        stream: mediaStreamForParticipant(participant),
-        screenStream: mediaStreamForParticipant(participant, true),
-        connected: participant.connectionQuality !== 'unknown',
+        peerId: member.peerId,
+        userId: member.userId,
+        userData: { name: member.name },
+        stream: participant ? mediaStreamForParticipant(participant) : undefined,
+        screenStream: participant ? mediaStreamForParticipant(participant, true) : undefined,
+        connected: Boolean(participant),
       };
     }));
-  }, []);
+  }, [userId]);
 
   const applySubscriptionPolicy = useCallback(() => {
     const room = roomRef.current;
@@ -199,6 +217,10 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const connectToLiveKit = useCallback(async () => {
     if (config.enabled === false) return;
     if (roomRef.current?.state === ConnectionState.Connected) return;
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    const generation = mediaGenerationRef.current;
+    try {
     const response = await fetch('/api/media/token', {
       method: 'POST',
       credentials: 'include',
@@ -207,6 +229,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     });
     const credentials = await response.json();
     if (!response.ok) throw new Error(credentials.error || 'Unable to obtain a media token');
+    if (generation !== mediaGenerationRef.current) return;
 
     const room = new Room({
       // Tracks are rendered through composed MediaStreams rather than
@@ -252,7 +275,8 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     room.on(RoomEvent.Reconnecting, () => setError('Reconnecting media…'));
     room.on(RoomEvent.Reconnected, () => setError(null));
     room.on(RoomEvent.Disconnected, () => {
-      setPeers([]);
+      if (roomRef.current !== room) return;
+      syncRemoteParticipants();
       setNetworkQuality('Unknown');
       // LiveKit room deletion is the authoritative fallback when a signaling
       // event is missed during reconnect. Confirm durable room state before
@@ -286,15 +310,37 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     });
 
     await room.connect(credentials.url, credentials.token, { autoSubscribe: false });
-    await Promise.all([
-      room.localParticipant.setMicrophoneEnabled(true),
-      room.localParticipant.setCameraEnabled(true),
-    ]);
-    setIsMicOn(true);
-    setIsCameraOn(true);
+    if (roomRef.current !== room) { await room.disconnect(); return; }
     syncLocalStream(room.localParticipant);
     syncRemoteParticipants();
     applySubscriptionPolicy();
+    // Keep pre-join preferences. Camera denial must not abort the microphone
+    // or roster, and opening a meeting must never silently unmute someone.
+    const results = await Promise.allSettled([
+      (async () => {
+        const preview = previewAudioRef.current;
+        previewAudioRef.current = null;
+        if (preview && microphoneWantedRef.current && !hostMutedRef.current) {
+          await room.localParticipant.publishTrack(preview);
+          if (hostMutedRef.current || !microphoneWantedRef.current) await preview.mute();
+        } else {
+          preview?.stop();
+          await room.localParticipant.setMicrophoneEnabled(microphoneWantedRef.current && !hostMutedRef.current);
+        }
+      })(),
+      (async () => {
+        const preview = previewVideoRef.current;
+        previewVideoRef.current = null;
+        if (preview && cameraWantedRef.current) await room.localParticipant.publishTrack(preview);
+        else { preview?.stop(); await room.localParticipant.setCameraEnabled(cameraWantedRef.current); }
+      })(),
+    ]);
+    if (roomRef.current !== room) return;
+    syncLocalStream(room.localParticipant);
+    if (results.some((result) => result.status === 'rejected')) {
+      setError('A camera or microphone could not start. Use its button to allow access and retry.');
+    }
+    } finally { connectingRef.current = false; }
   }, [applySubscriptionPolicy, config.enabled, config.userName, isLowDataMode, roomId, syncLocalStream, syncRemoteParticipants]);
   const connectToLiveKitRef = useRef(connectToLiveKit);
 
@@ -491,18 +537,24 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   }, [applyBackground, backgroundImage, backgroundMode, isCameraOn, isMicOn, syncLocalStream]);
 
   const disconnectMedia = useCallback(() => {
+    mediaGenerationRef.current += 1;
+    approvedRef.current = false;
+    previewAudioRef.current?.stop(); previewAudioRef.current = null;
+    previewVideoRef.current?.stop(); previewVideoRef.current = null;
+    microphoneWantedRef.current = false; cameraWantedRef.current = false;
     const room = roomRef.current;
     roomRef.current = null;
     room?.disconnect();
     setLocalStream(null);
     setPeers([]);
+    signalingParticipantsRef.current.clear();
     setIsCameraOn(false);
     setIsMicOn(false);
     setIsScreenSharing(false);
   }, []);
 
   useEffect(() => {
-    if (config.enabled === false) return;
+    if (config.enabled === false || !userId) return;
     const socket = io(config.signalingServer, {
       withCredentials: true,
       transports: ['websocket'],
@@ -520,9 +572,9 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
         roomId, userId, userData: { name: pending.userName, ...pending.userData },
         isHost: pending.isHost, roomPassword: pending.roomPassword,
       });
-      pendingJoinRef.current = null;
     };
     socket.on('connect', emitPendingJoin);
+    socket.on('connect_error', () => setError('Meeting connection interrupted. Retrying…'));
     socket.on('join-pending', () => setJoinStatus('pending'));
     socket.on('join-approved', async (data) => {
       approvedRef.current = true;
@@ -533,6 +585,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       }
     });
     socket.on('join-denied', (data) => {
+      pendingJoinRef.current = null;
       setJoinStatus('denied');
       setError(data?.message || 'The server could not authorize this account for the meeting.');
     });
@@ -562,12 +615,20 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       items.some((item) => item.socketId === hand.socketId) ? items : [...items, hand]));
     socket.on('hand-lowered', ({ socketId }) => setRaisedHands((items) => items.filter((item) => item.socketId !== socketId)));
     socket.on('force-mute', async () => {
-      await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
-      setIsMicOn(false); setIsMutedByHost(true); setUnmuteRequested(false); syncLocalStream();
+      hostMutedRef.current = true;
+      microphoneWantedRef.current = false;
+      setIsMutedByHost(true); setUnmuteRequested(false);
+      try {
+        await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
+        previewAudioRef.current?.stop(); previewAudioRef.current = null;
+        setIsMicOn(false); syncLocalStream();
+      } catch { setError('Unable to mute the microphone. Please mute it using your device controls.'); }
     });
-    socket.on('allow-unmute', async () => {
-      await roomRef.current?.localParticipant.setMicrophoneEnabled(true);
-      setIsMicOn(true); setIsMutedByHost(false); setUnmuteRequested(false); syncLocalStream();
+    socket.on('allow-unmute', () => {
+      // Safari requires capture to start from a user gesture, not a socket event.
+      hostMutedRef.current = false;
+      setIsMutedByHost(false); setUnmuteRequested(false);
+      setError('The host approved unmuting. Tap the microphone to turn it on.');
     });
     socket.on('unmute-denied', () => { setUnmuteRequested(false); setIsMutedByHost(true); });
     socket.on('force-video-off', async () => {
@@ -575,9 +636,11 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       setIsCameraOn(false); syncLocalStream();
     });
     socket.on('meeting-ended', () => {
+      pendingJoinRef.current = null;
       setMeetingEnded(true); setJoinStatus('denied'); setError('The meeting has ended.'); disconnectMedia();
     });
     socket.on('participant-removed', () => {
+      pendingJoinRef.current = null;
       setJoinStatus('denied'); setError('You were removed from the meeting.'); disconnectMedia();
     });
     socket.on('meeting-lock-changed', ({ locked }) => setIsMeetingLocked(Boolean(locked)));
@@ -598,7 +661,6 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
         roomId, userId, userData: { name: payload.userName, ...payload.userData },
         isHost: payload.isHost, roomPassword: payload.roomPassword,
       });
-      pendingJoinRef.current = null;
     }
   }, [roomId, userId]);
 
@@ -621,20 +683,49 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const lowerHand = useCallback(() => { setIsHandRaised(false); emit('lower-hand', { roomId }); }, [emit, roomId]);
 
   const toggleCamera = useCallback(async () => {
-    const participant = roomRef.current?.localParticipant; if (!participant) return;
-    const enabled = !isCameraOn;
+    if (cameraBusyRef.current) return;
+    cameraBusyRef.current = true;
+    const participant = roomRef.current?.state === ConnectionState.Connected ? roomRef.current.localParticipant : null;
+    const enabled = participant ? !participant.isCameraEnabled : !cameraWantedRef.current;
+    const generation = mediaGenerationRef.current;
     try {
-      await participant.setCameraEnabled(enabled); setIsCameraOn(enabled); syncLocalStream(participant); setError(null);
+      if (participant) await participant.setCameraEnabled(enabled);
+      else if (enabled) {
+        const track = await createLocalVideoTrack();
+        if (generation !== mediaGenerationRef.current) { track.stop(); return; }
+        if (roomRef.current?.state === ConnectionState.Connected) {
+          await roomRef.current.localParticipant.publishTrack(track);
+        } else previewVideoRef.current = track;
+      } else { previewVideoRef.current?.stop(); previewVideoRef.current = null; }
+      cameraWantedRef.current = enabled;
+      setIsCameraOn(enabled); syncLocalStream(participant || undefined); setError(null);
       if (enabled && backgroundMode !== 'none') await applyBackground(backgroundMode, backgroundImage);
     } catch { setError('Camera access failed. Check permission or select another camera.'); }
-  }, [applyBackground, backgroundImage, backgroundMode, isCameraOn, syncLocalStream]);
+    finally { cameraBusyRef.current = false; }
+  }, [applyBackground, backgroundImage, backgroundMode, syncLocalStream]);
   const toggleMicrophone = useCallback(async () => {
-    if (isMutedByHost) return;
-    const participant = roomRef.current?.localParticipant; if (!participant) return;
-    const enabled = !isMicOn;
-    try { await participant.setMicrophoneEnabled(enabled); setIsMicOn(enabled); syncLocalStream(participant); setError(null); }
+    if (hostMutedRef.current || microphoneBusyRef.current) return;
+    microphoneBusyRef.current = true;
+    const participant = roomRef.current?.state === ConnectionState.Connected ? roomRef.current.localParticipant : null;
+    const enabled = participant ? !participant.isMicrophoneEnabled : !microphoneWantedRef.current;
+    const generation = mediaGenerationRef.current;
+    try {
+      if (participant) await participant.setMicrophoneEnabled(enabled);
+      else if (enabled) {
+        const track = await createLocalAudioTrack();
+        if (generation !== mediaGenerationRef.current || hostMutedRef.current) { track.stop(); return; }
+        if (roomRef.current?.state === ConnectionState.Connected) {
+          await roomRef.current.localParticipant.publishTrack(track);
+          if (hostMutedRef.current) { await track.mute(); return; }
+        } else previewAudioRef.current = track;
+      } else { previewAudioRef.current?.stop(); previewAudioRef.current = null; }
+      if (hostMutedRef.current && participant) { await participant.setMicrophoneEnabled(false); return; }
+      microphoneWantedRef.current = enabled;
+      setIsMicOn(enabled); syncLocalStream(participant || undefined); setError(null);
+    }
     catch { setError('Microphone access failed. Check permission or select another microphone.'); }
-  }, [isMicOn, isMutedByHost, syncLocalStream]);
+    finally { microphoneBusyRef.current = false; }
+  }, [syncLocalStream]);
   const toggleScreenShare = useCallback(async (includeDeviceAudio = false) => {
     const participant = roomRef.current?.localParticipant; if (!participant) return;
     const enabled = !isScreenSharing;

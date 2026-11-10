@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { getSessionUser } from '@/lib/browserSession';
 import { ArrowUpRight, Disc3, Download, FileAudio, Film, RefreshCw, Search, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -50,15 +51,14 @@ export default function RecordingsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-
-    if (!userData) {
-      router.push('/auth/login');
-      return;
-    }
-
-    setUser(JSON.parse(userData));
-    void loadRecordings();
+    let cancelled = false;
+    void getSessionUser().then((session) => {
+      if (cancelled) return;
+      if (!session || session.guest) { router.push('/auth/login'); return; }
+      setUser(session);
+      void loadRecordings();
+    }).catch((cause) => { if (!cancelled) { setError(cause.message); setLoading(false); } });
+    return () => { cancelled = true; };
   }, [router]);
 
   const logoutToLogin = (message?: string) => {
@@ -211,7 +211,7 @@ export default function RecordingsPage() {
     }
   }, [page, totalPages]);
 
-  if (!user) return null;
+  if (!user) return <div role="status" className="p-6">{error || 'Checking session…'}{error && <Button onClick={() => window.location.reload()}>Retry</Button>}</div>;
 
   return (
     <UserSidebar user={user} onLogout={handleLogout}>

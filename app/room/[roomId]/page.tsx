@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMeetingMedia, type MeetingMediaProvider } from '@/hooks/useMeetingMedia';
+import { getSessionUser } from '@/lib/browserSession';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -104,19 +105,6 @@ function getSignalingServerUrl() {
   }
   const url = process.env.NEXT_PUBLIC_SIGNALING_SERVER || 'http://localhost:3002';
   return url.replace(/\/+$/, '');
-}
-
-function getStoredUser() {
-  if (typeof window === 'undefined') return null;
-  const userRaw = localStorage.getItem('user');
-  if (!userRaw) return null;
-
-  try {
-    return JSON.parse(userRaw);
-  } catch (error) {
-    console.warn('Ignoring invalid localStorage "user" value:', error);
-    return null;
-  }
 }
 
 export default function RoomPage() {
@@ -240,17 +228,23 @@ export default function RoomPage() {
   });
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    const nextUserId = String(
-      storedUser?.id ??
-      (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`)
-    );
-    const nextUserName = String(storedUser?.name ?? 'Guest');
-    setUserId(nextUserId);
-    setUserName(nextUserName);
-    setDisplayName(nextUserName);
-    setClientIdentityReady(true);
-  }, []);
+    let cancelled = false;
+    void getSessionUser().then((session) => {
+      if (cancelled) return;
+      const usable = session && (!session.guest || session.roomId === roomId);
+      setUserId(usable ? session.id : crypto.randomUUID());
+      setUserName(usable ? session.name : 'Guest');
+      setDisplayName(usable ? session.name : '');
+      setGuestSessionReady(Boolean(usable));
+      setNeedsName(!usable);
+      setClientIdentityReady(true);
+    }).catch(() => {
+      if (cancelled) return;
+      setNeedsName(true);
+      setGuestSessionError('Unable to verify your session. Check the connection and retry.');
+    });
+    return () => { cancelled = true; };
+  }, [roomId]);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
@@ -340,14 +334,8 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!clientIdentityReady || !userId) return;
-    const storedUser = getStoredUser();
-    const guestName = typeof window !== 'undefined' ? localStorage.getItem('guestName') : null;
-
-    if (!storedUser && !guestSessionReady) {
+    if (!guestSessionReady) {
       setNeedsName(true);
-      if (guestName && !displayName) {
-        setDisplayName(guestName);
-      }
       setCreatorChecked(true);
       return;
     }
@@ -710,11 +698,10 @@ export default function RoomPage() {
       if (!response.ok || !data?.user?.id) {
         throw new Error(data?.error || 'Unable to start the guest session.');
       }
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('guestName', displayName.trim());
-      }
       setUserId(String(data.user.id));
       setUserName(String(data.user.name || displayName.trim()));
+      setDisplayName(String(data.user.name || displayName.trim()));
+      setClientIdentityReady(true);
       setGuestSessionReady(true);
       setCreatorChecked(false);
       setJoinInitiated(false);

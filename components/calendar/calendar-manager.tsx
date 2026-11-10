@@ -1,5 +1,7 @@
 'use client';
 
+import { getSessionUser } from '@/lib/browserSession';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -219,15 +221,14 @@ export function CalendarManager() {
   const [refreshingBookings, setRefreshingBookings] = useState(false);
 
   useEffect(() => {
-    const rawUser = localStorage.getItem('user');
-
-    if (!rawUser) {
-      router.push('/auth/login');
-      return;
-    }
-
-    setUser(JSON.parse(rawUser));
-    setReady(true);
+    let cancelled = false;
+    void getSessionUser().then((session) => {
+      if (cancelled) return;
+      if (!session || session.guest) { router.push('/auth/login'); return; }
+      setUser(session);
+      setReady(true);
+    }).catch((cause) => { if (!cancelled) setError(cause.message); });
+    return () => { cancelled = true; };
   }, [router]);
 
   useEffect(() => {
@@ -471,7 +472,7 @@ export function CalendarManager() {
   }, [calendars, selectedCalendar]);
 
   if (!ready || !user) {
-    return null;
+    return <div role="status" className="p-6">{error || 'Checking session…'}{error && <Button onClick={() => window.location.reload()}>Retry</Button>}</div>;
   }
 
   return (

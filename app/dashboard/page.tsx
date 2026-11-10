@@ -1,6 +1,7 @@
 'use client';
 
 import React from "react"
+import { getSessionUser } from '@/lib/browserSession';
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -51,17 +52,17 @@ export default function DashboardPage() {
   const [recordingCount, setRecordingCount] = useState(0);
   const [readyRecordingCount, setReadyRecordingCount] = useState(0);
   useEffect(() => {
-    // Check authentication
-    const userData = localStorage.getItem('user');
-
-    if (!userData) {
-      router.push('/auth/login');
-      return;
-    }
-
-    setUser(JSON.parse(userData));
-    fetchRooms();
-    fetchRecordings();
+    let cancelled = false;
+    void getSessionUser().then((session) => {
+      if (cancelled) return;
+      if (!session || session.guest) { router.push('/auth/login'); return; }
+      setUser(session);
+      void fetchRooms();
+      void fetchRecordings();
+    }).catch((cause) => {
+      if (!cancelled) { setError(cause.message); setLoading(false); }
+    });
+    return () => { cancelled = true; };
   }, [router]);
 
   const logoutToLogin = (message?: string) => {
@@ -182,7 +183,7 @@ export default function DashboardPage() {
   };
 
   if (!user) {
-    return null;
+    return <div role="status" className="p-6">{error || 'Checking session…'}{error && <Button onClick={() => window.location.reload()}>Retry</Button>}</div>;
   }
 
   const activeRooms = rooms.filter((room) => !room.ended_at);

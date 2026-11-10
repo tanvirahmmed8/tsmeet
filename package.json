@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "ts-node --project server/tsconfig.json server/tests/calendarService.test.ts && ts-node --project server/tsconfig.json server/tests/mediaProvider.test.ts && ts-node --project server/tsconfig.json server/tests/livekitRoomLifecycle.test.ts && ts-node --project server/tsconfig.json server/tests/storageQuota.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaNetworkPolicy.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaTokenProxy.test.ts && ts-node --files --project server/tsconfig.json server/tests/recordingFullStorage.test.ts && node scripts/validate-tls-renewal-config.cjs",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "test:safari": "ts-node --project tsconfig.client-tests.json tests/safariCompatibility.test.ts",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:safari && pnpm build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

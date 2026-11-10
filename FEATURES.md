@@ -17,6 +17,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Feature | Status | Notes |
 |---|---|---|
 | Camera and microphone preview before joining | Available | Choose devices before entering |
+| Safari capture preferences | Implemented; device retest pending | Pre-join capture uses explicit buttons; joining preserves mute/camera choices; host approval requires a participant tap to unmute |
 | Input/output device selection | Available | Microphone, camera, and speaker pickers |
 | Gallery layout | Available | Grid of participants |
 | Active-speaker layout | Available | Current speaker on stage |
@@ -29,6 +30,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | In-meeting chat | Available | Text chat over Socket.IO |
 | Hand raising | Available | With host visibility |
 | Participant status indicators | Available | Mute, camera, hand, host badges |
+| Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated |
 | Network quality indicator | Available | Shown in the meeting header |
 | Responsive mobile layout | Available | Verified down to 320 px |
 
@@ -134,6 +136,7 @@ per [docs/OPTIONAL_DOCKER_PROFILES.md](docs/OPTIONAL_DOCKER_PROFILES.md).
 | Embedded TURN | Optional | `3478/udp`, `5349/tcp` when enabled |
 | Legacy WebRTC mesh | Rollback only | `MAX_MESH_PARTICIPANTS`, default 8 |
 | HttpOnly session cookie | Available | Not readable from JavaScript |
+| Cookie-based identity recovery | Implemented; device retest pending | Meeting/dashboard/calendar identity is verified through `/api/auth/session`; guest entry preserves a valid account cookie |
 | Same-origin Next.js API proxy | Available | Keeps the cookie same-origin |
 | Server-derived meeting roles | Available | Clients cannot claim host |
 | Five-minute LiveKit join tokens | Available | Issued only after waiting-room approval |
