@@ -52,10 +52,59 @@ Source: [BUG_LIST.md](BUG_LIST.md)
 | M18: optional recording | 8–15 h |
 | সব ১৮টি item | **107.5–196.5 h** |
 
-Planning buffer ২০% রাখলে পুরো scope-এর budget প্রায় **129–236 h**।
+উপরের estimates মূল bug-fix baseline। নিচের LiveKit component integration-এর
+জন্য shared **8–14 h** allowance একবার যোগ হবে (প্রতি milestone-এ নয়);
+updated full-scope planning range **115.5–210.5 h**, ২০% buffer-সহ প্রায়
+**139–253 h**। M04 verification-এ installed SDK compatibility ও prototype দেখে
+allowance revise করতে হবে; এটি fixed delivery commitment নয়।
 M16–M18 feature/infrastructure work; core bug-fix release-এর completion এগুলোর উপর নির্ভর করবে না।
 Recording আগের সিদ্ধান্ত অনুযায়ী deferred থাকবে যতক্ষণ deployment capacity ও enablement অনুমোদিত না হয়।
 Full AI noise cancellation, নতুন hardware provisioning এবং বড় architecture migration এই estimate-এর বাইরে।
+
+## Meeting UI — LiveKit component-based implementation direction
+
+Updated: 2026-11-10. Primary scope: **M04, M10, M11, M12**। Related rendering
+checks: **M06, M08, M09**; M07-এ adaptive subscription compatibility এবং M15-এ
+self-view mirror behaviour preserve করতে হবে। সব reported issue responsive/UI
+cause ধরে নেওয়া যাবে না—track delivery, network ও identity mapping আলাদা verify।
+
+- Existing custom meeting screen-এর media/rendering অংশে installed
+  `@livekit/components-react`-এর compatible `RoomContext`/room provider,
+  `ParticipantTile`/`VideoTrack`, `GridLayout`, focus layout ও audio renderer
+  evaluate/reuse করতে হবে। Public API installed version-এ আছে কি না আগে যাচাই;
+  package/lockfile upgrade প্রয়োজন হলে user approval নিতে হবে।
+- TSMeet branding, responsive toolbar/sidebar, waiting-room/host/recording
+  controls থাকবে custom। Ready-made meeting screen দিয়ে product policy replace
+  নয়; একটি existing `Room` instance reuse, দ্বিতীয় media connection নয়।
+- Shared integration **M04 Step 2**-তে শুরু হবে, M10–M12 তা reuse করবে;
+  একই foundation আলাদা milestone-এ আবার implement/estimate নয়। প্রয়োজনমতো
+  focused components-এ meeting UI ভাগ করা হবে, unrelated rewrite নয়।
+- SDK components-এর সঙ্গে custom `srcObject` plumbing ও analyser একসঙ্গে
+  duplicate playback/active-speaker ownership তৈরি করবে না। Active speaker-এর
+  জন্য SDK events ব্যবহার; approved roster, host-mute/session guards বজায় রাখা।
+- Component adoption alone fullscreen portal placement, CSS overflow, names,
+  accessibility বা Safari behaviour ঠিক করবে—এমন দাবি নয়। Fullscreen root-এর
+  মধ্যে toolbar ও portal overlays reachable রাখতে হবে; ছোট viewport/orientation
+  change, sidebar-open ও keyboard/touch interactions test করতে হবে।
+- Media rendering প্রস্তুত হওয়ার পরে adaptive stream evaluate করতে হবে;
+  existing manual subscription/quality policy-এর সঙ্গে conflict রাখা যাবে না।
+  এই UI scope দিয়ে network/server root cause resolved ঘোষণা নয়।
+
+Shared allowance investigation, integration, regression ও deployment validation
+সব মিলিয়ে একবার গণনা করা; baseline bug-specific hours-এর সঙ্গে একই কাজ
+double-count নয়। M04 Step 1-এ breakdown ও revised totals লিখতে হবে।
+
+**UI milestones-এর Step 1/Step 3 test matrix:** supported small mobile
+portrait/landscape, tablet ও laptop; app/tile/browser fullscreen; sidebar
+open/closed; camera/mic off, long names, screen-share focus, participant
+join/leave এবং pin/hide-self। Real iPhone Safari ও laptop-এ compare করতে হবে;
+চলতি configured participant limit অতিক্রম নয়। Screenshots-এর সঙ্গে actual
+control interaction/audio playback ফলও record করতে হবে। `pnpm check` pass
+বা SDK component ব্যবহার করা একা responsive/device acceptance নয়।
+
+Detailed overlap/preservation rationale: [LIVEKIT_REFACTOR_REVIEW.md](LIVEKIT_REFACTOR_REVIEW.md)।
+প্রতি milestone-এ আগের মতোই **তিনটি step** থাকবে। এই section নতুন completion
+claim নয়; M01–M03-এর local fixes এবং pending real-device acceptance অপরিবর্তিত।
 
 ## Milestone execution checklist
 
@@ -88,7 +137,7 @@ Status: Step 2 local lifecycle fix and automated checks complete (2026-11-10); S
 Status: Not started. Estimate: **4.5–8.5 h**.
 
 - [ ] **Step 1 — Verify (1–2 h):** App, tile ও browser fullscreen আলাদা করে local reproduce; fullscreen element, dialog/menu placement ও pointer/focus পরীক্ষা। Server check কেবল deployed build আলাদা হলে। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h):** Fullscreen container, overlay, focus বা layout-এর প্রমাণিত fault ঠিক করা। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (2–4 h + shared integration allowance-এর প্রযোজ্য অংশ):** Verified fullscreen fault fix-এর সঙ্গে shared LiveKit component foundation শুরু: existing Room instance provider/context-এ expose, SDK-compatible track/audio rendering prototype এবং TSMeet toolbar/sidebar integration। Fullscreen root ও dialog/menu portal container, focus/exit controls ঠিক করা; double connection/audio নয়। M10–M12 reuse করবে। Relevant regression test ও `pnpm check` চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Fullscreen-এর ভিতর mic/camera, chat, participant panel, share, leave এবং exit controls কাজ করে। Result ও commit reference record হলে step complete।
 
 ### M05 — BUG-11: Chat delivery
@@ -104,7 +153,7 @@ Status: Not started. Estimate: **4.5–8.5 h**.
 Status: Not started. Estimate: **7–13 h**.
 
 - [ ] **Step 1 — Verify (2–4 h):** Local/remote feed আলাদা করে join/leave, layout switch ও quality change record। Server-only হলে LiveKit reconnect/track events ও browser WebRTC stats তুলনা। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–6 h):** Unnecessary remount, resubscription বা track replacement-এর confirmed কারণ সংশোধন। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (3–6 h):** Shared LiveKit rendering foundation ব্যবহার করে confirmed unnecessary remount, resubscription বা track replacement ঠিক করা; stable track keys ও attach/detach lifecycle বজায় রাখা। Custom MediaStream recreation ও SDK rendering একসঙ্গে চালানো নয়। Network/capture cause হলে আলাদা fix; component migration দিয়ে resolved দাবি নয়। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: বারবার tile reset/blink নেই; ৩০ মিনিটের call-এ layout ও participant changes-এর পর video stable। Result ও commit reference record হলে step complete।
 
 ### M07 — BUG-08: Poor video quality
@@ -120,7 +169,7 @@ Status: Not started. Estimate: **7–14 h**.
 Status: Not started. Estimate: **7–13 h**.
 
 - [ ] **Step 1 — Verify (2–4 h):** দুই device দিয়ে clap/speech test; time drift ও screen-share impact record। Browser stats এবং প্রয়োজন হলে LiveKit/server CPU/network correlate। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–6 h):** Confirmed audio/video attachment, buffering বা track lifecycle issue fix; arbitrary fixed delay দিয়ে কারণ ঢেকে রাখা নয়। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (3–6 h):** Shared SDK track/audio renderer দিয়ে confirmed attachment/lifecycle fault fix; remote audio-এর একটিমাত্র playback owner এবং camera/screen audio separation যাচাই। Buffering/network cause আলাদা তদন্ত; arbitrary fixed delay দিয়ে কারণ ঢেকে রাখা নয়। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Start ও ৩০ মিনিট পরে noticeable drift নেই; camera toggle, reconnect ও share-এর পরে sync যাচাই। Result ও commit reference record হলে step complete।
 
 ### M09 — BUG-12: Screen sharing
@@ -128,7 +177,7 @@ Status: Not started. Estimate: **7–13 h**.
 Status: Not started. Estimate: **7–11 h**.
 
 - [ ] **Step 1 — Verify (2–3 h):** Failureটি start, remote display, sizing, audio না stop—প্রথমে isolate। Target browser capability local-এ verify; server check শুধু track delivery failure হলে। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–5 h):** Supported flow-এর confirmed bug fix; unsupported capture/audio capability-তে পরিষ্কার feedback। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (3–5 h):** Supported flow-এর confirmed bug fix; screen-share track shared LiveKit focus rendering-এ দেখানো, content-fit/contain sizing ও camera filmstrip responsive রাখা। Capture permission/audio support SDK component দিয়ে বাড়বে না—unsupported capability-তে পরিষ্কার feedback। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Laptop share start/stop ও remote reception কাজ করে; iPhone receiver পরীক্ষা; source browser সমর্থন অনুযায়ী audio যাচাই। Result ও commit reference record হলে step complete।
 
 ### M10 — BUG-05: Gallery / speaker view
@@ -136,7 +185,7 @@ Status: Not started. Estimate: **7–11 h**.
 Status: Not started. Estimate: **4.5–8.5 h**.
 
 - [ ] **Step 1 — Verify (1–2 h):** Multiple participant ও speaker change দিয়ে local layout test। Existing control অনুপস্থিত নাকি runtime bug তা যাচাই; production build mismatch হলে server check। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h):** Existing layout selection/active-speaker state fix; missing behaviour হলে feature scope হিসেবে record করে implement। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (2–4 h):** M04-এর shared foundation reuse করে compatible LiveKit grid/focus layout ও track hooks দিয়ে gallery/speaker view তৈরি; custom AudioContext analyser-এর বদলে SDK active-speaker events map করা। TSMeet layout selection, pin/hide-self ও screen-share priority বজায় রাখা; admitted media-off user-এর placeholder দেখানো। Missing behaviour feature scope হিসেবে record; relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Gallery ও speaker view সঠিকভাবে বদলায়; pin/hide-self এবং participant leave-এর পর layout সঠিক। Result ও commit reference record হলে step complete।
 
 ### M11 — BUG-07: Video sizing
@@ -144,7 +193,7 @@ Status: Not started. Estimate: **4.5–8.5 h**.
 Status: Not started. Estimate: **4–7 h**.
 
 - [ ] **Step 1 — Verify (1–2 h):** Mobile portrait/landscape, laptop ও fullscreen-এ tile size/aspect ratio reproduce; সাধারণত local UI check যথেষ্ট। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–3 h):** Confirmed sizing, overflow ও aspect-ratio rules fix; screen content ও camera framing আলাদা প্রয়োজন অনুযায়ী। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (2–3 h):** Shared LiveKit tiles/layout reuse করে viewport-height, min-size, aspect ratio, paging/overflow ও sidebar-open sizing ঠিক করা। Camera framing ও screen content-fit আলাদা; toolbar safe-area, portrait/landscape ও fullscreen-এ visible থাকবে। Adaptive rendering integration-এর dimensions/subscription ownership পরীক্ষা; relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (1–2 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Stretch/overflow নেই; supported viewport-এ names ও controls visible; orientation switch ঠিক থাকে। Result ও commit reference record হলে step complete।
 
 ### M12 — BUG-10: Participant names
@@ -152,7 +201,7 @@ Status: Not started. Estimate: **4–7 h**.
 Status: Not started. Estimate: **2.5–4.5 h**.
 
 - [ ] **Step 1 — Verify (0.5–1 h):** Name data আছে কিন্তু label hidden, নাকি data missing—local test। Missing identity/event হলে backend/proxy trace প্রয়োজন। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (1–2 h):** Confirmed name mapping, fallback, contrast বা overlay issue fix। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [ ] **Step 2 — Fix (1–2 h):** Shared LiveKit ParticipantTile/name component বা compatible custom overlay ব্যবহার; approved roster-এর userId ↔ media identity mapping, name fallback ও camera-off placeholder বজায় রাখা। Theme contrast, long Bengali/English names, truncation/accessibility এবং controls-এর সঙ্গে overlap fix। Missing backend identity component দিয়ে তৈরি নয়; relevant regression test ও local checks চালিয়ে result লিখতে হবে।
 - [ ] **Step 3 — Local commit → server commands → retest (1–1.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Host/guest নাম camera on/off, gallery, speaker, pinned ও fullscreen-এ readable। Result ও commit reference record হলে step complete।
 
 ### M13 — BUG-13: Noise suppression

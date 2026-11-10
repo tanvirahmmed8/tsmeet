@@ -27,6 +27,7 @@ Start with the row that matches what you are trying to do.
 | [BUG_LIST.md](BUG_LIST.md) | Reported meeting bugs, feature gaps, and retest checklist |
 | [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) | Three-step fix milestones, hourly estimates, deployment and retest gates |
 | [PHASE_1_SAFARI.md](PHASE_1_SAFARI.md) | Safari findings, local changes, native server hand-off and real-device acceptance tests |
+| [LIVEKIT_REFACTOR_REVIEW.md](LIVEKIT_REFACTOR_REVIEW.md) | Custom media code overlap, application logic to preserve, and proposed SDK-native refactor order |
 | [CONVAY_COMPARISON.md](CONVAY_COMPARISON.md) | Public Convay feature research compared with TSMeet source, gaps, and unverified differences |
 | [adr/](adr/) | Architecture decision records — why things are the way they are |
 
