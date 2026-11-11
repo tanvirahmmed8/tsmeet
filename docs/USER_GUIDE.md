@@ -42,7 +42,10 @@ as a guest; see [Joining a meeting](#joining-a-meeting).
 
 1. Sign in and go to your **dashboard**.
 2. Create a room. Give it a title and, optionally, a description.
-3. Optionally set a **room password**. Anyone joining who is not you will be
+3. To set a **room password**, enable **Require meeting password** and enter a
+   new meeting-specific password. The field is hidden by default and uses a
+   new-password autocomplete hint to distinguish it from saved login credentials;
+   password-manager behaviour may vary. Anyone joining who is not you will be
    asked for it before they even reach the waiting room.
 4. You are taken into the room and you are the **host**.
 

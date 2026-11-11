@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [newRoomTitle, setNewRoomTitle] = useState('');
   const [newRoomPassword, setNewRoomPassword] = useState('');
+  const [requireRoomPassword, setRequireRoomPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string>('');
   const [recordingCount, setRecordingCount] = useState(0);
@@ -141,7 +142,7 @@ export default function DashboardPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title: newRoomTitle, password: newRoomPassword }),
+        body: JSON.stringify({ title: newRoomTitle, password: requireRoomPassword ? newRoomPassword : '' }),
       });
 
       if (res.status === 401 || res.status === 403) {
@@ -154,6 +155,7 @@ export default function DashboardPage() {
         setRooms([newRoom, ...rooms]);
         setNewRoomTitle('');
         setNewRoomPassword('');
+        setRequireRoomPassword(false);
       } else {
         const data = await res.json().catch(() => null);
         setError(data?.error || 'Failed to create room');
@@ -265,22 +267,46 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <form onSubmit={createRoom} className="flex flex-1 flex-col gap-3">
+                <form onSubmit={createRoom} autoComplete="off" className="flex flex-1 flex-col gap-3">
+                  <label htmlFor="new-meeting-title" className="text-sm font-medium">Meeting title</label>
                   <Input
+                    id="new-meeting-title"
+                    name="meetingTitle"
+                    type="text"
+                    autoComplete="off"
                     placeholder="Enter meeting title..."
                     value={newRoomTitle}
                     onChange={(e) => setNewRoomTitle(e.target.value)}
                     className="h-12 bg-black/40 border-primary/20 focus-visible:ring-primary/30"
                     maxLength={100}
                   />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={requireRoomPassword}
+                      onChange={(event) => {
+                        setRequireRoomPassword(event.target.checked);
+                        setNewRoomPassword('');
+                      }}
+                    />
+                    Require meeting password
+                  </label>
+                  {requireRoomPassword ? <>
+                  <label htmlFor="new-meeting-access-password" className="text-sm font-medium">Meeting password</label>
                   <Input
-                    placeholder="Optional: Set a meeting password..."
+                    id="new-meeting-access-password"
+                    name="meetingAccessPassword"
+                    autoComplete="new-password"
+                    placeholder="Enter a meeting password..."
                     type="password"
+                    required
                     value={newRoomPassword}
                     onChange={(e) => setNewRoomPassword(e.target.value)}
                     className="h-12 bg-black/40 border-primary/20 focus-visible:ring-primary/30"
                     maxLength={100}
-                  /><Button
+                  />
+                  </> : null}
+                  <Button
                     type="submit"
                     disabled={creating || !newRoomTitle.trim()}
                     className="h-12 rounded-2xl bg-primary px-6 text-primary-foreground hover:bg-primary/90"

@@ -75,7 +75,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Registration and sign-in | Available | bcrypt password hashing |
 | Protected dashboard | Available | Meetings, calendars, recordings |
 | Room creation with title and description | Available | — |
-| Optional room password | Available | bcrypt-hashed, checked at join |
+| Optional room password | Available | Explicitly enable “Require meeting password” on the dashboard; separate new-password autocomplete hint; bcrypt-hashed, checked at join |
 | Guest join via shareable link | Available | No account; token bound to that one room |
 | Meeting history | Available | Rooms you created |
 | Participant limit | Available | `MAX_PARTICIPANTS`, default 50 |
