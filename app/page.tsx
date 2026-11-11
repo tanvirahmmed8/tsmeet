@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { BrandLogo } from '@/components/brand-logo';
 import {
   Video,
   Share2,
@@ -75,12 +76,7 @@ export default function Home() {
       {/* Navigation */}
       <header className="fixed top-0 w-full z-50 border-b border-border backdrop-blur-md bg-background/80 dark:bg-background/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <Video className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <h1 className="font-bold text-xl text-foreground dark:text-accent">TSMeet</h1>
-          </div>
+          <h1><Link href="/" aria-label="TSMeet home"><BrandLogo iconSize={36} className="text-xl text-foreground" /></Link></h1>
 
           <div className="hidden md:flex items-center gap-6">
             <a
@@ -311,12 +307,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <Video className="w-4 h-4 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-foreground dark:text-accent">TSMeet</span>
-              </div>
+              <Link href="/" className="mb-4 inline-flex" aria-label="TSMeet home"><BrandLogo iconSize={28} className="text-lg text-foreground" /></Link>
               <p className="text-sm text-foreground/60 dark:text-foreground/70">
                 Video meetings and scheduling for focused teams
               </p>

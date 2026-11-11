@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="368" height="96" viewBox="0 0 368 96"><svg x="0" y="0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="tsmeet-teal" x1="10" y1="5" x2="113" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#11b8a8"/>
+      <stop offset="1" stop-color="#00796f"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#tsmeet-teal)"/>
+  <path d="M38 34H71C79 34 84 40 84 48V64C84 72 79 78 71 78H52L38 90V78C30 78 24 72 24 64V48C24 40 30 34 38 34Z" fill="#fff"/>
+  <path d="M91 49L103 41C106 39 108 40 108 44V71C108 75 106 76 103 74L91 66V49Z" fill="#fff"/>
+  <path d="M39 46H69V54H58V69H50V54H39V46Z" fill="#00877b"/>
+</svg>
+<text x="116" y="66" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700" letter-spacing="-2" fill="#102b33">TS<tspan fill="#00998b">Meet</tspan></text></svg>

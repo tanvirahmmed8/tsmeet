@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from '@/components/brand-logo';
 import {
   Sidebar,
   SidebarContent,
@@ -107,6 +108,9 @@ export function UserSidebar({
     <SidebarProvider defaultOpen>
       <Sidebar variant="floating" collapsible="icon" className="border-r-0">
         <SidebarHeader className="gap-3 p-3">
+          <Link href="/dashboard" className="w-fit rounded-lg p-1 text-sidebar-foreground outline-offset-4 group-data-[collapsible=icon]:p-0" aria-label="TSMeet dashboard">
+            <BrandLogo iconSize={32} className="text-xl" wordmarkClassName="group-data-[collapsible=icon]:hidden" />
+          </Link>
           <div className="rounded-[28px] border border-sidebar-border/70 bg-sidebar/95 p-4 shadow-[0_16px_40px_-28px_rgba(7,24,33,0.35)]">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-semibold text-white">

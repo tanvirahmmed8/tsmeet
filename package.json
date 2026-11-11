@@ -15,7 +15,7 @@
     "test": "ts-node --project server/tsconfig.json server/tests/calendarService.test.ts && ts-node --project server/tsconfig.json server/tests/mediaProvider.test.ts && ts-node --project server/tsconfig.json server/tests/livekitRoomLifecycle.test.ts && ts-node --project server/tsconfig.json server/tests/storageQuota.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaNetworkPolicy.test.ts && ts-node --project tsconfig.client-tests.json tests/mediaTokenProxy.test.ts && ts-node --files --project server/tsconfig.json server/tests/recordingFullStorage.test.ts && node scripts/validate-tls-renewal-config.cjs",
     "test:safari": "ts-node --project tsconfig.client-tests.json tests/safariCompatibility.test.ts",
     "test:dependencies": "ts-node --project server/tsconfig.json server/tests/dependencyCompatibility.test.ts",
-    "test:meeting-ui": "ts-node --project tsconfig.client-tests.json tests/meetingFullscreen.test.ts && ts-node --project tsconfig.client-tests.json tests/meetingSounds.test.ts && node scripts/generate-meeting-sounds.cjs --check",
+    "test:meeting-ui": "ts-node --project tsconfig.client-tests.json tests/meetingFullscreen.test.ts && ts-node --project tsconfig.client-tests.json tests/meetingSounds.test.ts && node scripts/generate-meeting-sounds.cjs --check && node scripts/validate-brand-assets.cjs",
     "test:chat": "ts-node --project server/tsconfig.json server/tests/meetingChat.test.ts && ts-node --project tsconfig.client-tests.json tests/meetingChat.test.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:safari && pnpm test:dependencies && pnpm test:meeting-ui && pnpm test:chat && pnpm build"
   },

@@ -1,4 +1,4 @@
-<h1 align="center">TSMeet</h1>
+<h1 align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="public/brand/logo-dark.svg"><img src="public/brand/logo.svg" alt="TSMeet" width="300"></picture></h1>
 
 <p align="center">
   <strong>Self-hosted video meetings, scheduling, and recording — on your own server.</strong>

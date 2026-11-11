@@ -1,8 +1,11 @@
 import React from "react"
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
+  applicationName: 'TSMeet',
+  manifest: '/site.webmanifest',
+  appleWebApp: { capable: true, title: 'TSMeet', statusBarStyle: 'default' },
   title: {
     default: 'TSMeet - Secure Open-Source Video Meetings',
     template: '%s | TSMeet'
@@ -21,37 +24,30 @@ export const metadata: Metadata = {
     description: 'TSMeet is the best open-source video conferencing platform for private, zero-latency group calls, screen sharing, recording, and calendar scheduling.',
     siteName: 'TSMeet',
     images: [{
-      url: '/og-image.jpg',
+      url: '/og-image.png',
       width: 1200,
       height: 630,
-      alt: 'TSMeet Video Conferencing Dashboard',
+      alt: 'TSMeet — Meet. Share. Connect. Self-hosted video meetings.',
     }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'TSMeet - Secure Open-Source Video Meetings',
     description: 'TSMeet is the best open-source video conferencing platform for private, zero-latency group calls.',
-    images: ['/og-image.jpg'],
+    images: ['/og-image.png'],
   },
-  generator: 'v0.app',
   icons: {
     icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
+      { url: '/favicon.ico?v=tsmeet-1', sizes: '16x16 32x32 48x48' },
+      { url: '/favicon-32x32.png?v=tsmeet-1', type: 'image/png', sizes: '32x32' },
+      { url: '/icon.svg?v=tsmeet-1', type: 'image/svg+xml', sizes: 'any' },
     ],
-    apple: '/apple-icon.png',
+    shortcut: '/favicon.ico?v=tsmeet-1',
+    apple: [{ url: '/apple-icon.png?v=tsmeet-1', sizes: '180x180', type: 'image/png' }],
   },
 }
+
+export const viewport: Viewport = { themeColor: '#00877b' }
 
 export default function RootLayout({
   children,

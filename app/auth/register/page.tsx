@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Video, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -71,12 +72,7 @@ export default function RegisterPage() {
       </div>
 
       <Card className="w-full max-w-md border-primary/10 bg-card/50 backdrop-blur-sm p-8">
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Video className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground dark:text-accent">TSMeet</h1>
-        </div>
+        <h1 className="mb-8 text-center"><BrandLogo iconSize={48} className="text-2xl text-foreground" /></h1>
 
         <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Create account</h2>
           <p className="text-foreground/60 dark:text-foreground/70 text-center mb-6">

@@ -1,6 +1,7 @@
 'use client';
 
 import { getSessionUser } from '@/lib/browserSession';
+import { BrandLogo } from '@/components/brand-logo';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -480,9 +481,7 @@ export function CalendarManager() {
       <nav className="border-b border-border bg-card/50 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <CalendarDays className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <BrandLogo iconSize={40} iconOnly />
             <div>
               <h1 className="font-bold text-lg text-foreground dark:text-accent">TSMeet Calendars</h1>
               <p className="text-xs text-foreground/50">API-first scheduling</p>
