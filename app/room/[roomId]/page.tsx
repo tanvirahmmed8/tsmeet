@@ -11,6 +11,8 @@ import { getSessionUser } from '@/lib/browserSession';
 import { MeetingMediaProvider as MeetingMediaBoundary, MeetingPlayback, MeetingVideo } from '@/components/meeting/meeting-media';
 import { OverlayPortalContext } from '@/components/ui/overlay-portal';
 import { toggleMeetingFullscreen } from '@/lib/meetingFullscreen';
+import { useMeetingSounds } from '@/hooks/useMeetingSounds';
+import { SOUND_LABELS, type MeetingSound } from '@/lib/meetingSounds';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -147,6 +149,8 @@ export default function RoomPage() {
   const [roomPassword, setRoomPassword] = useState('');
   const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
   const [videoSettingsOpen, setVideoSettingsOpen] = useState(false);
+  const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
+  const [soundPreview, setSoundPreview] = useState<MeetingSound>('chat');
   const [microphoneDevices, setMicrophoneDevices] = useState<MediaDeviceInfo[]>([]);
   const [speakerDevices, setSpeakerDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
@@ -177,6 +181,7 @@ export default function RoomPage() {
 
   const {
     livekitRoom,
+    signalingInterrupted, recordingNotice, rosterReady,
     chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage: sendChatMessage,
     localStream,
     peers,
@@ -233,6 +238,16 @@ export default function RoomPage() {
     pinnedParticipantId: pinnedId,
     activeSpeakerId,
   });
+
+  const notificationSounds = useMeetingSounds(roomId, {
+    approved: joinStatus === 'approved', ready: rosterReady,
+    moderator: isHost || coHosts.has(userId), selfId: userId,
+    participants: [...new Set(peers.filter((peer) => !('hidden' in peer && peer.hidden)).map((peer) => peer.userId || peer.peerId).filter((id) => id !== userId))],
+    requests: pendingRequests.map((request) => request.userId || request.socketId),
+    hands: raisedHands.map((hand) => hand.userId || hand.socketId),
+    unread: unreadChatCount, interrupted: signalingInterrupted,
+    ended: meetingEnded, recording: recordingNotice?.status || 'idle',
+  }, livekitRoom);
 
   useEffect(() => {
     let cancelled = false;
@@ -880,6 +895,44 @@ export default function RoomPage() {
     <OverlayPortalContext.Provider value={meetingRoot || undefined}>
     <div ref={setMeetingRoot} data-meeting-shell className="h-dvh w-full min-h-0 bg-[radial-gradient(circle_at_top,#12343b_0%,#0c1722_18%,#09111a_56%,#060c13_100%)] text-white flex flex-col overflow-hidden">
       <MeetingPlayback />
+      {joinStatus === 'approved' && ['recording', 'paused'].includes(recordingNotice?.status || '') ? (
+        <div role="status" className="shrink-0 bg-red-950/80 px-4 py-2 text-center text-sm text-red-100">
+          <Circle aria-hidden="true" className="mr-2 inline h-3 w-3 fill-red-400 text-red-400" />
+          {recordingNotice?.status === 'paused' ? 'Recording paused' : 'This meeting is being recorded'}
+        </div>
+      ) : null}
+      <Dialog open={soundSettingsOpen} onOpenChange={setSoundSettingsOpen}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Notification sounds</DialogTitle>
+            <DialogDescription>Soft meeting alerts, played only on this device. Your microphone and meeting audio are not changed.</DialogDescription>
+          </DialogHeader>
+          <label className="flex items-center justify-between gap-4 py-2 text-sm font-medium">
+            Play notification sounds
+            <input type="checkbox" className="h-5 w-5 accent-teal-600" checked={notificationSounds.preferences.enabled} onChange={(event) => notificationSounds.updatePreferences({ enabled: event.target.checked })} />
+          </label>
+          <div className="space-y-2">
+            <label htmlFor="notification-volume" className="flex justify-between text-sm font-medium">Notification volume <span>{notificationSounds.preferences.volume}%</span></label>
+            <input id="notification-volume" type="range" min="0" max="100" step="5" className="w-full accent-teal-600" disabled={!notificationSounds.preferences.enabled} value={notificationSounds.preferences.volume} onChange={(event) => notificationSounds.updatePreferences({ volume: Number(event.target.value) })} />
+          </div>
+          <label className="flex items-center justify-between gap-4 py-2 text-sm">
+            Participant join and leave sounds
+            <input type="checkbox" className="h-5 w-5 accent-teal-600" disabled={!notificationSounds.preferences.enabled} checked={notificationSounds.preferences.joinLeave} onChange={(event) => notificationSounds.updatePreferences({ joinLeave: event.target.checked })} />
+          </label>
+          <p className="text-xs text-muted-foreground">Join/leave sounds are automatically quiet in meetings with more than 10 people. Recording indicators remain visible even when sounds are off.</p>
+          <p role="status" className="text-xs text-muted-foreground">{!notificationSounds.preferences.enabled ? 'Sounds are off.' : notificationSounds.unlocked ? 'Sound playback enabled. Your device silent mode and output volume still apply.' : 'Tap Test sound to enable playback. Safari may require another tap after switching apps.'}</p>
+          <div className="space-y-2">
+            <label htmlFor="notification-preview" className="text-sm font-medium">Preview a sound</label>
+            <select id="notification-preview" className="w-full rounded-md border border-input bg-background p-2 text-sm text-foreground" value={soundPreview} onChange={(event) => setSoundPreview(event.target.value as MeetingSound)}>
+              {Object.entries(SOUND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => void notificationSounds.testSound(soundPreview)} disabled={!notificationSounds.preferences.enabled || notificationSounds.preferences.volume === 0}><Volume2 className="mr-2 h-4 w-4" /> Test sound</Button>
+            <Button onClick={() => setSoundSettingsOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {fullscreenError ? <div role="alert" className="shrink-0 bg-red-950 px-4 py-2 text-sm">{fullscreenError}</div> : null}
       <Dialog open={needsName} onOpenChange={() => {}}>
         <DialogContent showCloseButton={false}>
@@ -2125,6 +2178,7 @@ export default function RoomPage() {
               <DropdownMenuContent align="center" sideOffset={10} className="w-56">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Meeting {roomLabel}</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={copyRoomLink}><Copy className="h-4 w-4" /> Copy meeting link</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setSoundSettingsOpen(true)}><Volume2 className="h-4 w-4" /> Notification sounds</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setHideSelf((current) => !current)}>
                   {hideSelf ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   {hideSelf ? 'Show my tile' : 'Hide my tile'}

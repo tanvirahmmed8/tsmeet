@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TSMeet — Original notification sounds</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.6 system-ui, sans-serif; background: #08131b; color: #eef9f7; }
+    body { max-width: 1000px; margin: auto; padding: 36px 20px 64px; }
+    .eyebrow { color: #5eead4; letter-spacing: .18em; font-size: 12px; text-transform: uppercase; }
+    h1 { font-size: clamp(28px, 5vw, 44px); letter-spacing: -.04em; margin: 8px 0; }
+    header p { color: #acc3cc; max-width: 680px; }
+    main { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 275px), 1fr)); gap: 16px; margin-top: 32px; }
+    article { background: #10232d; border: 1px solid #29414b; border-radius: 18px; padding: 20px; min-width: 0; }
+    h2 { font-size: 16px; margin: 0 0 3px; }
+    article p { font-size: 13px; color: #a8c1c9; margin: 0 0 18px; }
+    audio { width: 100%; height: 40px; }
+    footer { color: #a8c1c9; font-size: 13px; margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">TSMeet / Sound identity</div>
+    <h1>A little warmth for every meeting.</h1>
+    <p>Twelve original, gentle bell-and-key chimes. Short melodies, soft attacks and a light stereo room tail. Press play to audition each file; start with your device volume low.</p>
+  </header>
+  <main>
+    <article><h2>Participant joined</h2><p>A welcoming upward sparkle.</p><audio controls preload="none" aria-label="Participant joined"><source src="participant-joined.wav" type="audio/wav"></audio></article>
+    <article><h2>Participant left</h2><p>A soft downward farewell.</p><audio controls preload="none" aria-label="Participant left"><source src="participant-left.wav" type="audio/wav"></audio></article>
+    <article><h2>Waiting-room request</h2><p>A friendly three-note doorbell.</p><audio controls preload="none" aria-label="Waiting-room request"><source src="join-request.wav" type="audio/wav"></audio></article>
+    <article><h2>New chat message</h2><p>A tiny, bright double-key ping.</p><audio controls preload="none" aria-label="New chat message"><source src="chat-message.wav" type="audio/wav"></audio></article>
+    <article><h2>Hand raised</h2><p>A gentle upward question.</p><audio controls preload="none" aria-label="Hand raised"><source src="hand-raised.wav" type="audio/wav"></audio></article>
+    <article><h2>Recording started</h2><p>A warm rising major chord.</p><audio controls preload="none" aria-label="Recording started"><source src="recording-started.wav" type="audio/wav"></audio></article>
+    <article><h2>Recording paused</h2><p>Two measured, matching taps.</p><audio controls preload="none" aria-label="Recording paused"><source src="recording-paused.wav" type="audio/wav"></audio></article>
+    <article><h2>Recording resumed</h2><p>A light three-note lift.</p><audio controls preload="none" aria-label="Recording resumed"><source src="recording-resumed.wav" type="audio/wav"></audio></article>
+    <article><h2>Recording stopped</h2><p>A calm, rounded descending chord.</p><audio controls preload="none" aria-label="Recording stopped"><source src="recording-stopped.wav" type="audio/wav"></audio></article>
+    <article><h2>Connection interrupted</h2><p>A low, unobtrusive caution.</p><audio controls preload="none" aria-label="Connection interrupted"><source src="connection-lost.wav" type="audio/wav"></audio></article>
+    <article><h2>Connection restored</h2><p>A reassuring return to harmony.</p><audio controls preload="none" aria-label="Connection restored"><source src="connection-restored.wav" type="audio/wav"></audio></article>
+    <article><h2>Meeting ended</h2><p>A relaxed, resolving sign-off.</p><audio controls preload="none" aria-label="Meeting ended"><source src="meeting-ended.wav" type="audio/wav"></audio></article>
+  </main>
+  <footer>Original TSMeet compositions, generated locally without sampled audio or external services. This preview uses your device volume; in-meeting notification volume is controlled separately. Audible iPhone/Safari acceptance testing remains a manual step.</footer>
+</body>
+</html>

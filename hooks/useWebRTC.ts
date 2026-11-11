@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import SimplePeer from 'simple-peer';
 import { io, Socket } from 'socket.io-client';
 import { useMeetingChat } from './useMeetingChat';
+import { useMeetingSignals } from './useMeetingSignals';
 
 interface PeerConnection {
   peerId: string;
@@ -49,6 +50,7 @@ interface RaisedHand {
 }
 
 export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) => {
+  const { bindMeetingSignals, ...meetingSignals } = useMeetingSignals(roomId);
   const socketRef = useRef<Socket | null>(null);
   const rawStreamRef = useRef<MediaStream | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -70,7 +72,6 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const { chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, userId, socketRef, approvedRef);
   const selfSocketIdRef = useRef<string | null>(null);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean } | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const iceServersRef = useRef<RTCIceServer[]>(config.iceServers || []);
 
   const [peers, setPeers] = useState<PeerConnection[]>([]);
@@ -229,27 +230,6 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     socketRef.current.emit('deny-unmute', { roomId, targetSocketId });
     setUnmuteRequests((prev) => prev.filter((req) => req.socketId !== targetSocketId));
   }, [roomId]);
-
-  const playRaiseHandSound = useCallback(() => {
-    try {
-      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextCtor) return;
-      const ctx = audioContextRef.current || new AudioContextCtor();
-      audioContextRef.current = ctx;
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.value = 0.08;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.15);
-    } catch (err) {
-      console.warn('[WebRTC] Unable to play raise hand sound:', err);
-    }
-  }, []);
 
   const raiseHand = useCallback(() => {
     if (!socketRef.current) return;
@@ -436,6 +416,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
       });
 
       socketRef.current.on('receive-message', receiveMessage);
+      bindMeetingSignals(socketRef.current);
       socketRef.current.on('connect', () => {
         selfSocketIdRef.current = socketRef.current?.id || null;
         approvedRef.current = false;
@@ -495,9 +476,6 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
           return [...prev, data];
         });
 
-        if (data.socketId !== selfSocketIdRef.current) {
-          playRaiseHandSound();
-        }
       });
 
       socketRef.current.on('hand-lowered', (data: { socketId: string }) => {
@@ -690,7 +668,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         socketRef.current.disconnect();
       }
     };
-  }, [roomId, userId, config.enabled, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack, playRaiseHandSound, receiveMessage]);
+  }, [bindMeetingSignals, roomId, userId, config.enabled, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack, receiveMessage]);
 
   const ensureSegmentation = useCallback(async () => {
     if (segmentationRef.current) return segmentationRef.current;
@@ -1190,6 +1168,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   }, [cleanupRoom]);
 
   return {
+    ...meetingSignals,
     chatMessages, unreadChatCount, setChatReadState, chatError,
     localStream,
     peers,

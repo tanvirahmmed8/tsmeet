@@ -94,6 +94,49 @@ devices to use.
 
 ## Inside the meeting
 
+### Notification sounds
+
+Open **More → Notification sounds** to turn alerts on/off, set their volume,
+toggle participant join/leave sounds, or choose any event under **Preview a sound**
+and press **Test sound**. All twelve original clips can also be auditioned at
+`/sounds/preview.html` without entering a meeting. Preferences are
+saved on this browser/device when storage is available; they do not change
+anyone else's settings or your microphone/call volume.
+
+Soft chimes distinguish participant join/leave, new waiting-room requests,
+unread chat, raised hands, recording start/pause/resume/stop, interrupted/restored
+connections and the host ending the meeting. Waiting-room and hand alerts are
+for host/co-hosts. Your own chat and hand raise do not trigger alerts. Chat pings
+only when the message increases the unread count (chat closed or backgrounded).
+
+Initial participant lists and reconnection roster snapshots are silent. Join/leave
+chimes are automatically suppressed above 10 participants; rapid events are
+coalesced/rate-limited. Recording tones are not spoken announcements, and the
+recording/paused indicator remains visible with sounds off. Existing consent
+requirements are unchanged. The original audio files are hosted with TSMeet in
+`public/sounds/`: twelve short stereo WAV clips (approximately 1.78 MiB total),
+with no third-party sound service or subscription. Files preload after an audio
+unlocking gesture and use a lightweight synthesized fallback if unavailable or
+not yet decoded. See [sound assets](../public/sounds/README.md) for provenance
+and regeneration instructions.
+
+Browsers, especially iPhone Safari, require a user interaction before sound can
+play. Tap **Test sound** if needed, including after switching apps. Blocked
+alerts are dropped rather than replayed later. Silent mode, output volume and
+browser background restrictions may prevent an audible alert: always use the
+visual participant, chat, connection and recording indicators too. Notification
+tones use the device's browser/default output; choosing a meeting speaker does
+not reroute this separate notification output.
+When sharing tab/system audio, the browser may capture notification tones too;
+turn notifications off for a quiet presentation if needed.
+
+Manual acceptance: use two clients to check join/leave and closed-chat pings;
+send a waiting-room request and raise a guest hand for host/co-host alerts;
+verify recording tones with consent on a recording-enabled environment; briefly
+disconnect/reconnect one client; end the meeting; test mute, volume, Test sound
+and iPhone Safari after app switching. Real-device audible verification remains
+pending.
+
 <p align="center">
   <img src="images/meeting-toolbar.png" alt="Meeting toolbar with microphone, camera, share, system audio, hand raise, chat, fullscreen, and leave controls" width="760">
 </p>

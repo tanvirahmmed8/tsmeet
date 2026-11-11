@@ -22,6 +22,7 @@ import { evaluateNetworkSample, type NetworkAdaptationState, type NetworkTier } 
 import { mergeMeetingParticipants } from '@/lib/meetingParticipants';
 import { setMicrophoneEnabledSafely } from '@/lib/microphoneOperation';
 import { useMeetingChat } from './useMeetingChat';
+import { useMeetingSignals } from './useMeetingSignals';
 
 type BackgroundMode = 'none' | 'blur' | 'image';
 type JoinStatus = 'idle' | 'pending' | 'approved' | 'denied' | 'password-required' | 'password-incorrect';
@@ -78,6 +79,7 @@ function identityUserId(identity: string) {
 }
 
 export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitConfig) {
+  const { bindMeetingSignals, ...meetingSignals } = useMeetingSignals(roomId);
   const roomRef = useRef<Room | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const selfSocketIdRef = useRef<string | null>(null);
@@ -578,6 +580,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       reconnectionDelayMax: 5000,
     });
     socketRef.current = socket;
+    bindMeetingSignals(socket);
     socket.on('receive-message', receiveMessage);
 
     const emitPendingJoin = () => {
@@ -668,7 +671,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       socket.removeAllListeners(); socket.disconnect(); socketRef.current = null;
       disconnectMedia();
     };
-  }, [config.enabled, config.signalingServer, disconnectMedia, receiveMessage, roomId, syncLocalStream, syncRemoteParticipants, userId]);
+  }, [bindMeetingSignals, config.enabled, config.signalingServer, disconnectMedia, receiveMessage, roomId, syncLocalStream, syncRemoteParticipants, userId]);
 
   const emit = useCallback((event: string, payload: object) => socketRef.current?.emit(event, payload), []);
   const requestJoin = useCallback((payload: { userName: string; isHost: boolean; roomPassword?: string; userData?: any }) => {
@@ -794,6 +797,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
 
   return {
     livekitRoom,
+    ...meetingSignals,
     chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage,
     localStream, peers, error, isCameraOn, isMicOn, isScreenSharing, joinStatus,
     pendingRequests, isHost, unmuteRequests, isMutedByHost, unmuteRequested,

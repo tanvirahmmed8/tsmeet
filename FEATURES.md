@@ -32,6 +32,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | In-meeting chat | Implemented; production/device retest pending | Room-scoped Socket.IO server echo with admitted sender identity, acknowledgement/error feedback and bounded live history; no offline replay or persistent history |
 | Chat unread indicators and message bubbles | Implemented; browser retest pending | Incoming messages count while chat is closed/backgrounded; focused visible chat clears count; own messages align right, others left; badge displays 99+ above 99 |
 | Hand raising | Available | With host visibility |
+| Meeting notification sounds | Implemented; audible device retest pending | 12 original self-hosted stereo WAV chimes for join/leave, waiting requests, unread chat, moderator hand alerts, recording transitions, reconnect and meeting end. More menu includes on/off, volume, join/leave toggle and individual sound previews. Gesture-gated playback, cooldowns, large-room suppression and synthesized fallback; no external audio service. Preview: `/sounds/preview.html` |
 | Participant status indicators | Available | Mute, camera, hand, host badges |
 | Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated. After a server roster snapshot, stale media cannot add departed/removed attendees back to the count |
 | Network quality indicator | Available | Shown in the meeting header |
