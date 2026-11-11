@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
+import type { NamedRouteRequest as Request } from '../types/namedRouteRequest';
 import { v4 as uuidv4 } from 'uuid';
 import { acquireBookingLock, pool } from '../db';
 import {

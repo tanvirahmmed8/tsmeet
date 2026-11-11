@@ -23,7 +23,8 @@ Please search existing issues and pull requests before opening a new one.
 
 ## Development setup
 
-Use Node.js 20 or newer and pnpm. The easiest setup runs infrastructure in
+Use Node.js 22.13+ (22.x), 24.x, or 26+ and the pinned pnpm 10.28.0.
+Docker and CI use Node 22. The easiest setup runs infrastructure in
 Docker and the application processes locally:
 
 ```bash
@@ -42,6 +43,44 @@ Never commit `.env`, `server/.env`, production secrets, generated production
 LiveKit YAML, or TLS private keys.
 
 ## Working on a change
+
+### Dependency baseline (2026-11-11)
+
+Application dependencies were refreshed to registry stable releases, including
+Next.js 16.4.6, React 19.3.1, LiveKit client 2.23.0/components 2.9.25/server SDK
+2.19.3, Express 5.3.0, and TypeScript 6.0.3. Calendar, chart and resizable
+wrappers were migrated; recording artifact URLs retain their existing contract.
+`prom-client` was replaced by the official `@prometheus-io/client` package;
+application metric names remain unchanged. Obsolete bcrypt/uuid typings were removed.
+
+Intentional compatibility holds (do not describe these as "everything latest"):
+
+- TypeScript stays on 6.0.3: the existing `ts-node` runner cannot use the
+  TypeScript 7 native compiler's missing JavaScript compiler API.
+- ESLint stays on 9.39.5: Next's current React/import/accessibility plugins
+  do not declare ESLint 10 support. ESLint 9 is upstream-deprecated; revisit
+  this hold when those plugins support 10, rather than suppressing peer errors.
+- Node typings match the Node 22 runtime, not the registry's Node 26 typings.
+- pnpm remains pinned to 10.28.0 for CI/Docker/lockfile consistency; upgrading
+  the package-manager toolchain is separate from application packages.
+
+Security overrides patch brace-expansion (1.1.21/5.0.12) and replace minimatch
+10 with the dual CommonJS/ESM 11.0.1 security release. Recheck these against
+upstream package support during subsequent updates. See the official
+[TypeScript/ts-node compatibility issue](https://github.com/TypeStrong/ts-node/issues/2174),
+[Prometheus migration notes](https://github.com/prometheus/client_js/blob/master/CHANGELOG.md),
+[brace-expansion advisory](https://github.com/juliangruber/brace-expansion/security/advisories/GHSA-q2hr-2g5m-vwhr)
+and [minimatch advisory](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249).
+
+Install both package trees after pulling this update. pnpm users should use
+the root and server frozen lockfiles; native deployments using `npm ci` in
+`server/` must use the updated `server/package-lock.json`. Rebuild the frontend
+and restart the backend. No database reset, environment-secret change, or
+LiveKit-server binary/image upgrade is required by this dependency refresh.
+Browser/Safari audio-video, screen sharing, backgrounds and booking UI still
+need real-device smoke testing; automated checks do not replace that gate.
+
+### Change workflow
 
 1. Create a focused branch from the default branch:
 

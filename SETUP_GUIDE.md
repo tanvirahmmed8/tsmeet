@@ -7,8 +7,8 @@ here.
 
 ## Prerequisites
 
-- Node.js 20 or newer
-- pnpm 9 or newer
+- Node.js 22.13+ on the 22.x line, 24.x, or 26+ (Node 22 is used by Docker and CI)
+- pnpm 10.28.0, matching `packageManager` in `package.json`
 - Docker Desktop/Engine with the Compose plugin (recommended for MySQL, Redis,
   and LiveKit)
 - A browser with camera/microphone permissions

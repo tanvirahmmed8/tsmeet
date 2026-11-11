@@ -4,8 +4,32 @@ import { once } from 'node:events';
 import test from 'node:test';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4, validate as validateUuid } from 'uuid';
 import { guestSchema, loginSchema, registerSchema } from '../services/authValidation';
 import { checkObjectStorageHealth, createRecordingDownloadUrl, removeRecordingObjects } from '../services/objectStorage';
+import { activeRooms, httpRequestDuration, metricsRegistry, recordingFailures } from '../services/metrics';
+
+test('replacement Prometheus client preserves application metric names and exposition', async () => {
+  activeRooms.set(2);
+  recordingFailures.inc();
+  httpRequestDuration.observe({ method: 'GET', route: '/test', status: '200' }, 0.1);
+  const output = await metricsRegistry.metrics();
+  assert.match(metricsRegistry.contentType, /text\/plain/);
+  assert.match(output, /tsmeet_active_rooms 2/);
+  assert.match(output, /tsmeet_recording_failures_total 1/);
+  assert.match(output, /tsmeet_http_request_duration_seconds_count\{method="GET",route="\/test",status="200"\} 1/);
+});
+
+test('bcrypt 3 accepts legacy bcrypt 2 hashes and uuid runs in the CommonJS server', async () => {
+  // Generated with bcryptjs 2.4.3; test data only, never an account credential.
+  const legacyHash = '$2a$04$E8fudJlVWUrh7xIatz3yUOgTQQnkjcSLXik7gm5Ap87a6DZefwRXm';
+  assert.equal(await bcrypt.compare('legacy-test-password', legacyHash), true);
+  assert.equal(await bcrypt.compare('incorrect', legacyHash), false);
+  const generated = await bcrypt.hash('new-test-password', 4);
+  assert.equal(await bcrypt.compare('new-test-password', generated), true);
+  assert.equal(validateUuid(uuidv4()), true);
+});
 
 test('Zod upgrade preserves account and guest validation', () => {
   assert.deepEqual(registerSchema.parse({ email: ' HOST@example.com ', name: ' Host ', password: '12345678' }), {

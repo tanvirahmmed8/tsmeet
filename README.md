@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black.svg">
-  <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg">
+  <img alt="Node" src="https://img.shields.io/badge/node-22%20%7C%2024%20%7C%2026%2B-brightgreen.svg">
   <img alt="Media" src="https://img.shields.io/badge/media-LiveKit%20SFU-orange.svg">
   <img alt="Self-hosted" src="https://img.shields.io/badge/cloud%20API-none%20required-blue.svg">
 </p>

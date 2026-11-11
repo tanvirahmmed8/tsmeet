@@ -1,4 +1,5 @@
-import express, { Router, Request, Response } from 'express';
+import express, { Router, Response } from 'express';
+import type { NamedRouteRequest as Request } from '../types/namedRouteRequest';
 import { Server } from 'socket.io';
 import fs from 'fs/promises';
 import path from 'path';
@@ -385,9 +386,10 @@ export function createUserRecordingRoutes(
     }
   });
 
-  router.get('/:recordingId/:kind(video|audio)', async (req: Request, res: Response) => {
+  router.get(['/:recordingId/video', '/:recordingId/audio'], async (req: Request, res: Response) => {
     try {
-      const { recordingId, kind } = req.params;
+      const { recordingId } = req.params;
+      const kind = /\/audio\/?$/i.test(req.path) ? 'audio' : 'video';
       const ownedRecording = await getOwnedRecording(String(req.userId), recordingId);
       if (ownedRecording.error) {
         return res.status(ownedRecording.error.status).json(ownedRecording.error.body);
