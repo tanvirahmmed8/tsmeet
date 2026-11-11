@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
+import { AccountEntryGuard } from '@/components/auth/account-entry-guard';
+import { cacheSessionUser } from '@/lib/browserSession';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -50,10 +52,9 @@ export default function RegisterPage() {
       }
 
       const data = await res.json();
-      localStorage.removeItem('token');
-      localStorage.setItem('user', JSON.stringify(data.user));
+      cacheSessionUser(data.user);
 
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } catch (err) {
       setError('An error occurred. Please try again.');
       console.error(err);
@@ -63,6 +64,7 @@ export default function RegisterPage() {
   };
 
   return (
+    <AccountEntryGuard>
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-slate-900/5 dark:from-background dark:via-slate-950/50 dark:to-slate-900/20 flex items-center justify-center px-4">
       <div className="absolute top-8 left-8">
         <Link href="/" className="flex items-center gap-2 hover:opacity-70 transition">
@@ -168,5 +170,6 @@ export default function RegisterPage() {
         </div>
       </Card>
     </div>
+    </AccountEntryGuard>
   );
 }

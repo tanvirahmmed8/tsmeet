@@ -33,6 +33,17 @@ Passwords must be at least 8 characters. Your session is kept in a secure cookie
 that JavaScript cannot read, and it is what keeps you signed in — there is no
 token to copy or paste anywhere.
 
+When signed in with an account, the homepage shows **Dashboard** and **Sign out**
+instead of Login/Sign Up. Its meeting buttons lead to your dashboard, and opening
+the login/register pages redirects there after verifying your session. A short
+session-check state prevents the guest form/buttons from flashing first.
+Returning to the tab or using browser back rechecks the cookie; login/logout in
+another tab also triggers a recheck when browser storage events are available.
+If the backend cannot verify the session, use **Retry session check**: this is
+not treated as a logout. Room-scoped meeting guests may still sign into or create
+an account. Private-mode storage restrictions do not invalidate a successful
+cookie sign-in.
+
 **You do not need an account to join a meeting.** Anyone with the link can join
 as a guest; see [Joining a meeting](#joining-a-meeting).
 

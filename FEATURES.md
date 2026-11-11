@@ -76,6 +76,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Feature | Status | Notes |
 |---|---|---|
 | Registration and sign-in | Available | bcrypt password hashing |
+| Session-aware public navigation | Implemented; production retest pending | Verified account cookies show Dashboard/Sign out on home and route meeting CTAs to dashboard. Signed-in accounts are redirected away from login/register without rendering their forms; room-scoped guests can still create/sign into an account. Loading/outage states offer checking/retry instead of assuming logout; focus/back and session-change events recheck the cookie |
 | Protected dashboard | Available | Meetings, calendars, recordings |
 | Room creation with title and description | Available | — |
 | Optional room password | Available | Explicitly enable “Require meeting password” on the dashboard; separate new-password autocomplete hint; bcrypt-hashed, checked at join |

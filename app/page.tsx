@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { BrandLogo } from '@/components/brand-logo';
+import { useAccountSession } from '@/hooks/useAccountSession';
 import {
   Video,
   Share2,
@@ -15,10 +16,22 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 
 export default function Home() {
-  const [isHovering, setIsHovering] = useState(false);
+  const account = useAccountSession();
+  const meetingAction = (label: string, arrow = false) => {
+    if (account.status === 'loading' || account.status === 'error') {
+      return <Button size="lg" className="px-8" disabled={account.status === 'loading'} onClick={() => void account.refresh()}>{account.status === 'loading' ? 'Checking session…' : 'Retry session check'}</Button>;
+    }
+    return (
+      <Button asChild size="lg" className="bg-primary px-8 text-primary-foreground hover:bg-primary/90">
+        <Link href={account.status === 'authenticated' ? '/dashboard' : '/auth/register'}>
+          {account.status === 'authenticated' && label === 'Get Started' ? 'Go to Dashboard' : label}
+          {arrow && <ArrowRight className="ml-2 h-4 w-4" />}
+        </Link>
+      </Button>
+    );
+  };
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -97,16 +110,17 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/auth/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link href="/auth/register">
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                Sign Up
-              </Button>
-            </Link>
+            {account.status === 'loading' ? <Button variant="ghost" disabled>Checking session…</Button>
+              : account.status === 'authenticated' ? <>
+                <Button asChild><Link href="/dashboard">Dashboard</Link></Button>
+                <Button variant="ghost" disabled={account.signingOut} onClick={() => void account.signOut()}>{account.signingOut ? 'Signing out…' : 'Sign out'}</Button>
+              </> : account.status === 'anonymous' ? <>
+                <Button asChild variant="ghost"><Link href="/auth/login">Login</Link></Button>
+                <Button asChild><Link href="/auth/register">Sign Up</Link></Button>
+              </> : <Button variant="outline" onClick={() => void account.refresh()}>Retry session check</Button>}
           </div>
         </div>
+        {account.error && <p role="alert" className="border-t border-destructive/20 bg-background px-4 py-2 text-center text-sm text-destructive">{account.error}</p>}
       </header>
 
       {/* Hero Section */}
@@ -131,17 +145,7 @@ export default function Home() {
             </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-            <Link href="/auth/register">
-              <Button
-                size="lg"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                Start a Meeting
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
+            {meetingAction('Start a Meeting', true)}
             <Button size="lg" variant="outline" className="px-8 border-primary/20 bg-transparent">
               Book a Demo
             </Button>
@@ -282,14 +286,7 @@ export default function Home() {
               Bring meetings, scheduling, and recording into one focused workspace
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/register">
-                <Button
-                  size="lg"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-8"
-                >
-                  Get Started
-                </Button>
-              </Link>
+              {meetingAction('Get Started')}
               <a
                 href="#contact"
                 className="text-primary hover:text-primary/80 font-medium flex items-center gap-2"

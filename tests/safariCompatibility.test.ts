@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NextRequest } from 'next/server';
 import { mergeMeetingParticipants } from '../lib/meetingParticipants';
-import { getSessionUser } from '../lib/browserSession';
+import { cacheSessionUser, getAccountSessionUser, getSessionUser, signOutSession } from '../lib/browserSession';
 import { setMicrophoneEnabledSafely } from '../lib/microphoneOperation';
 import { GET as session } from '../app/api/auth/session/route';
 import { POST as guest } from '../app/api/auth/guest/route';
@@ -33,6 +33,66 @@ test('media-only arrival is visible until signaling catches up; removed attendee
 });
 
 const origin = 'https://meet.example.com';
+
+test('public account UI verifies cookie identity and never promotes a meeting guest to an account', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, '/api/auth/session');
+      assert.equal(init?.credentials, 'include');
+      assert.equal(init?.cache, 'no-store');
+      return new Response(JSON.stringify({ user: { id: 'host', name: 'Host', guest: false } }));
+    };
+    assert.equal((await getAccountSessionUser())?.id, 'host');
+    globalThis.fetch = async () => new Response(JSON.stringify({ user: { id: 'guest', name: 'Guest', guest: true, roomId: 'room' } }));
+    assert.equal(await getAccountSessionUser(), null);
+    for (const status of [401, 403]) {
+      globalThis.fetch = async () => new Response('{}', { status });
+      assert.equal(await getAccountSessionUser(), null);
+    }
+    globalThis.fetch = async () => new Response('{}', { status: 503 });
+    await assert.rejects(getAccountSessionUser(), /Unable to verify/);
+    globalThis.fetch = async () => { throw new Error('Network unavailable'); };
+    await assert.rejects(getAccountSessionUser(), /Network unavailable/);
+  } finally { globalThis.fetch = previousFetch; }
+});
+
+test('public sign out uses the same-origin cookie route and preserves failure as an error', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, '/api/auth/logout');
+      assert.equal(init?.method, 'POST');
+      assert.equal(init?.credentials, 'include');
+      assert.equal(init?.cache, 'no-store');
+      return new Response('{}');
+    };
+    await signOutSession();
+    globalThis.fetch = async () => new Response('{}', { status: 503 });
+    await assert.rejects(signOutSession(), /Unable to sign out/);
+    // No browser storage is available in this test: caching must remain optional.
+    assert.doesNotThrow(() => cacheSessionUser({ id: 'host', name: 'Host' }));
+    assert.doesNotThrow(() => cacheSessionUser(null));
+  } finally { globalThis.fetch = previousFetch; }
+});
+
+test('blocked browser storage cannot fail a successful cookie-session cache update', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  try {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        removeItem() { throw new Error('Storage blocked'); },
+        setItem() { throw new Error('Storage blocked'); },
+      },
+    });
+    assert.doesNotThrow(() => cacheSessionUser({ id: 'fixture-host', guest: false }));
+    assert.doesNotThrow(() => cacheSessionUser(null));
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
+});
 test('microphone toggle awaits SDK mute/unmute before reporting completion', async () => {
   const calls: boolean[] = [];
   const participant = { setMicrophoneEnabled: async (enabled: boolean) => { calls.push(enabled); } };
