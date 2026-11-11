@@ -146,6 +146,14 @@ retrying to avoid a duplicate.
 Chat keeps only the latest 200 messages in the current page. Refresh/room change
 clears it; late joiners and disconnected clients do not receive missed history.
 
+Your messages appear on the right; other participants' messages appear on the
+left. New incoming messages add an unread badge when chat is closed or the
+window/tab is not focused and visible. Opening chat in a focused visible window
+clears that count (not a per-message read receipt). On mobile, check **More** and
+**Open chat** for the count. Your own messages do not add unread; badges show
+`99+` for larger counts. Unread is local to the current page, not synced across
+devices or stored as persistent history.
+
 ---
 
 ## Sharing your screen

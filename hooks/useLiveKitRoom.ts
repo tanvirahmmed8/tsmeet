@@ -82,7 +82,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const socketRef = useRef<Socket | null>(null);
   const selfSocketIdRef = useRef<string | null>(null);
   const approvedRef = useRef(false);
-  const { chatMessages, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, socketRef, approvedRef);
+  const { chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, userId, socketRef, approvedRef);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean; roomPassword?: string; userData?: any } | null>(null);
   const signalingParticipantsRef = useRef<Map<string, SignalingParticipant>>(new Map());
   const hasSignalingSnapshotRef = useRef(false);
@@ -794,7 +794,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
 
   return {
     livekitRoom,
-    chatMessages, chatError, sendMessage,
+    chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage,
     localStream, peers, error, isCameraOn, isMicOn, isScreenSharing, joinStatus,
     pendingRequests, isHost, unmuteRequests, isMutedByHost, unmuteRequested,
     raisedHands, isHandRaised, backgroundMode, backgroundImage, isLowDataMode,

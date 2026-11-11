@@ -36,6 +36,12 @@ still needs deployment/device confirmation.
 
 ## Validation and remaining acceptance
 
+Follow-up (2026-11-11): scoped portals also inherited the dark meeting shell's
+white text when a dialog used the light theme background. Shared DialogContent
+now explicitly uses the theme foreground, preserving custom dark-dialog text
+overrides. This corrects display-name title/input contrast without undoing the
+fullscreen portal container. The name input also has an accessible label.
+
 `pnpm test:meeting-ui` covers fullscreen entry, exit, unsupported browser/root,
 and request failure. These are helper tests, not DOM interaction or media tests.
 CI and `pnpm check` include this suite. Record final full-check/browser results

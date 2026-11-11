@@ -67,7 +67,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const backgroundImageRef = useRef<HTMLImageElement | null>(null);
   const backgroundModeRef = useRef<BackgroundMode>('none');
   const approvedRef = useRef(false);
-  const { chatMessages, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, socketRef, approvedRef);
+  const { chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, userId, socketRef, approvedRef);
   const selfSocketIdRef = useRef<string | null>(null);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -1190,7 +1190,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   }, [cleanupRoom]);
 
   return {
-    chatMessages, chatError,
+    chatMessages, unreadChatCount, setChatReadState, chatError,
     localStream,
     peers,
     error,

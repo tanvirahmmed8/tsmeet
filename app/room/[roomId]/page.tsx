@@ -177,7 +177,7 @@ export default function RoomPage() {
 
   const {
     livekitRoom,
-    chatMessages, chatError, sendMessage: sendChatMessage,
+    chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage: sendChatMessage,
     localStream,
     peers,
     error: webrtcError,
@@ -593,6 +593,20 @@ export default function RoomPage() {
     event.preventDefault();
   };
 
+  useEffect(() => {
+    const updateReadState = () => setChatReadState(activeSidebarTab === 'chat' && document.visibilityState === 'visible' && document.hasFocus());
+    updateReadState();
+    window.addEventListener('focus', updateReadState);
+    window.addEventListener('blur', updateReadState);
+    document.addEventListener('visibilitychange', updateReadState);
+    return () => {
+      window.removeEventListener('focus', updateReadState);
+      window.removeEventListener('blur', updateReadState);
+      document.removeEventListener('visibilitychange', updateReadState);
+      setChatReadState(false);
+    };
+  }, [activeSidebarTab, setChatReadState]);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || chatSendingRef.current) return;
@@ -880,6 +894,7 @@ export default function RoomPage() {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your name"
+            aria-label="Your name"
           />
           {guestSessionError && (
             <p className="text-sm text-red-400" role="alert">{guestSessionError}</p>
@@ -1656,17 +1671,19 @@ export default function RoomPage() {
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div role="log" aria-label="Meeting chat messages" aria-live="polite" className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
               {chatMessages.length === 0 ? (
                 <p className="text-center text-sm text-white/45">No messages yet</p>
               ) : (
                 chatMessages.map((msg) => (
-                  <div key={msg.id} className="text-sm">
-                    <div className="flex items-center gap-2">
+                  <div key={msg.id} className={`flex text-sm ${msg.senderId === userId ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`min-w-0 max-w-[88%] rounded-2xl px-3 py-2 ${msg.senderId === userId ? 'rounded-br-sm bg-teal-700 text-white' : 'rounded-bl-sm bg-white/10 text-white'}`}>
+                    <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <span className="min-w-0 break-words font-medium text-white">{msg.senderId === userId ? 'You' : msg.senderName}</span>
                       <span className="shrink-0 text-xs text-white/35">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                     </div>
                     <p className="whitespace-pre-wrap break-words text-white/70">{msg.message}</p>
+                  </div>
                   </div>
                 ))
               )}
@@ -2076,11 +2093,15 @@ export default function RoomPage() {
 
             <Button
               onClick={() => setActiveSidebarTab(activeSidebarTab === "chat" ? null : "chat")}
+              aria-label={unreadChatCount ? `Chat, ${unreadChatCount} unread messages` : 'Chat'}
+              title="Chat"
+              style={{ position: 'relative', overflow: 'visible' }}
               size="lg"
               variant={(activeSidebarTab === "chat") ? 'default' : 'outline'}
               className={(activeSidebarTab === "chat") ? 'hidden h-11 w-11 rounded-full bg-primary px-0 hover:bg-primary/90 sm:flex' : 'hidden h-11 w-11 rounded-full border-0 bg-white/10 px-0 text-white/80 hover:bg-white/20 hover:text-white sm:flex'}
             >
               <MessageSquare className="w-5 h-5" />
+              {unreadChatCount > 0 ? <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span> : null}
             </Button>
 
             <Button
@@ -2096,8 +2117,9 @@ export default function RoomPage() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="lg" variant="outline" className="h-11 w-11 rounded-full border-0 bg-white/10 px-0 text-white/80 hover:bg-white/20 hover:text-white" title="More meeting options">
+                <Button size="lg" variant="outline" className="relative h-11 w-11 rounded-full border-0 bg-white/10 px-0 text-white/80 hover:bg-white/20 hover:text-white" title="More meeting options" aria-label={unreadChatCount ? `More meeting options, ${unreadChatCount} unread chat messages` : 'More meeting options'}>
                   <MoreHorizontal className="h-5 w-5" />
+                  {unreadChatCount > 0 ? <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white sm:hidden">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span> : null}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" sideOffset={10} className="w-56">
@@ -2111,7 +2133,7 @@ export default function RoomPage() {
                 <DropdownMenuItem className="sm:hidden" onSelect={() => { setVideoSettingsOpen(false); setAudioSettingsOpen(true); }}><Mic className="h-4 w-4" /> Audio settings</DropdownMenuItem>
                 <DropdownMenuItem className="sm:hidden" onSelect={() => { setAudioSettingsOpen(false); setVideoSettingsOpen(true); }}><VideoIcon className="h-4 w-4" /> Video options</DropdownMenuItem>
                 <DropdownMenuItem className="sm:hidden" onSelect={isHandRaised ? lowerHand : raiseHand}><Hand className="h-4 w-4" /> {isHandRaised ? 'Lower hand' : 'Raise hand'}</DropdownMenuItem>
-                <DropdownMenuItem className="sm:hidden" onSelect={() => setActiveSidebarTab('chat')}><MessageSquare className="h-4 w-4" /> Open chat</DropdownMenuItem>
+                <DropdownMenuItem className="sm:hidden" onSelect={() => setActiveSidebarTab('chat')}><MessageSquare className="h-4 w-4" /> Open chat {unreadChatCount > 0 ? `(${unreadChatCount > 99 ? '99+' : unreadChatCount} unread)` : ''}</DropdownMenuItem>
                 <DropdownMenuItem className="sm:hidden" onSelect={() => setActiveSidebarTab('participants')}><Users className="h-4 w-4" /> Participants ({participantCount})</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void toggleFullscreen()}>
                   {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}

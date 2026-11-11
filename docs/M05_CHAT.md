@@ -57,6 +57,28 @@ real-client test below. There is no persistent history, late-join history or
 replay of messages missed while disconnected. No delivery/read guarantee is
 claimed for every recipient.
 
+## Follow-up — unread and alignment (2026-11-11)
+
+Chat now tracks unread independently from the bounded message array, so arrival
+still increments after the 200-message history limit. Valid remote messages only
+increment while chat is not being read; duplicates, malformed/wrong-room events
+and the sender's own echo do not increment. Opening/focusing visible chat marks
+the conversation read; this is not a peer read receipt or scroll-position-based
+per-message tracking. Blur/hidden tabs accumulate again. Room/user change resets
+the local state. Desktop chat and mobile More/Open chat surface the count, with
+99+ display capping. Own bubbles align right; others align left.
+
+`pnpm check` passed after this change: lint (0 errors, 10 existing warnings),
+typecheck, all suites including one Socket.IO integration test and four client
+chat-state tests, and production build. Tests cover unread filtering, mark-read
+preservation of history, reading/background transitions and counting beyond
+history capacity. No browser/device visual test was run for this follow-up.
+
+Manual acceptance remains pending: close/open chat, switch tabs/windows, own
+echo, message bursts and mobile badge visibility; check bubble wrapping and
+alignment on narrow/fullscreen views. This follow-up only requires frontend
+rebuild/deployment, not another backend contract change.
+
 ## Release and real-client acceptance — pending
 
 No Git command or production deployment was executed by the agent. Both

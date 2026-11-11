@@ -30,6 +30,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Adaptive video quality | Available | Reacts to measured network conditions |
 | Low-data mode | Available | For constrained connections |
 | In-meeting chat | Implemented; production/device retest pending | Room-scoped Socket.IO server echo with admitted sender identity, acknowledgement/error feedback and bounded live history; no offline replay or persistent history |
+| Chat unread indicators and message bubbles | Implemented; browser retest pending | Incoming messages count while chat is closed/backgrounded; focused visible chat clears count; own messages align right, others left; badge displays 99+ above 99 |
 | Hand raising | Available | With host visibility |
 | Participant status indicators | Available | Mute, camera, hand, host badges |
 | Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated. After a server roster snapshot, stale media cannot add departed/removed attendees back to the count |
