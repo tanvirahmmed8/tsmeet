@@ -71,6 +71,8 @@ pnpm typecheck
 pnpm test
 pnpm test:safari
 pnpm test:dependencies
+pnpm test:meeting-ui
+pnpm test:chat
 pnpm build
 ```
 

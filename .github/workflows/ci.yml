@@ -21,6 +21,8 @@ jobs:
       - run: pnpm test
       - run: pnpm test:safari
       - run: pnpm test:dependencies
+      - run: pnpm test:meeting-ui
+      - run: pnpm test:chat
       - run: pnpm build
       - run: pnpm audit --audit-level high
       - run: pnpm --dir server audit --audit-level high

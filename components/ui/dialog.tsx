@@ -5,6 +5,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useOverlayPortalContainer } from './overlay-portal'
 
 function Dialog({
   ...props
@@ -21,7 +22,8 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const container = useOverlayPortalContainer()
+  return <DialogPrimitive.Portal data-slot="dialog-portal" container={container} {...props} />
 }
 
 function DialogClose({

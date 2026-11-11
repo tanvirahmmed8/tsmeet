@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import SimplePeer from 'simple-peer';
 import { io, Socket } from 'socket.io-client';
+import { useMeetingChat } from './useMeetingChat';
 
 interface PeerConnection {
   peerId: string;
@@ -66,6 +67,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
   const backgroundImageRef = useRef<HTMLImageElement | null>(null);
   const backgroundModeRef = useRef<BackgroundMode>('none');
   const approvedRef = useRef(false);
+  const { chatMessages, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, socketRef, approvedRef);
   const selfSocketIdRef = useRef<string | null>(null);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -433,6 +435,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         reconnectionAttempts: 5,
       });
 
+      socketRef.current.on('receive-message', receiveMessage);
       socketRef.current.on('connect', () => {
         selfSocketIdRef.current = socketRef.current?.id || null;
         approvedRef.current = false;
@@ -687,7 +690,7 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         socketRef.current.disconnect();
       }
     };
-  }, [roomId, userId, config.enabled, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack, playRaiseHandSound]);
+  }, [roomId, userId, config.enabled, config.signalingServer, initializeLocalStream, createPeerConnection, removePeerConnection, cleanupRoom, applyVideoTrack, playRaiseHandSound, receiveMessage]);
 
   const ensureSegmentation = useCallback(async () => {
     if (segmentationRef.current) return segmentationRef.current;
@@ -1186,22 +1189,8 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     cleanupRoom(true);
   }, [cleanupRoom]);
 
-  // Send chat message
-  const sendMessage = useCallback(
-    (message: string) => {
-      if (socketRef.current) {
-        socketRef.current.emit('send-message', {
-          roomId,
-          message,
-          senderName: 'You',
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    [roomId]
-  );
-
   return {
+    chatMessages, chatError,
     localStream,
     peers,
     error,

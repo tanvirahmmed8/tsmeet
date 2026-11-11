@@ -30,6 +30,9 @@ pnpm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# Local browser verification artifacts
+.playwright-mcp/
+
 # Server-specific
 server/node_modules/
 server/.env

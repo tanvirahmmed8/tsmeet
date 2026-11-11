@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useMeetingMedia, type MeetingMediaProvider } from '@/hooks/useMeetingMedia';
 import { getSessionUser } from '@/lib/browserSession';
+import { MeetingMediaProvider as MeetingMediaBoundary, MeetingPlayback, MeetingVideo } from '@/components/meeting/meeting-media';
+import { OverlayPortalContext } from '@/components/ui/overlay-portal';
+import { toggleMeetingFullscreen } from '@/lib/meetingFullscreen';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -138,7 +141,8 @@ export default function RoomPage() {
 
   const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "participants" | "host" | null>(null);
   const [participantSearch, setParticipantSearch] = useState('');
-    const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatSending, setChatSending] = useState(false);
+  const chatSendingRef = useRef(false);
   const [messageInput, setMessageInput] = useState('');
   const [roomPassword, setRoomPassword] = useState('');
   const [audioSettingsOpen, setAudioSettingsOpen] = useState(false);
@@ -155,7 +159,8 @@ export default function RoomPage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localThumbRef = useRef<HTMLVideoElement>(null);
   const stageVideoRef = useRef<HTMLVideoElement | null>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const [meetingRoot, setMeetingRoot] = useState<HTMLDivElement | null>(null);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const recordingSessionIdRef = useRef<string | null>(null);
   const recordingPollTimerRef = useRef<number | null>(null);
@@ -171,6 +176,8 @@ export default function RoomPage() {
   const [showRecordingConsent, setShowRecordingConsent] = useState(false);
 
   const {
+    livekitRoom,
+    chatMessages, chatError, sendMessage: sendChatMessage,
     localStream,
     peers,
     error: webrtcError,
@@ -317,7 +324,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (!selectedSpeakerId) return;
     const applySpeakerSelection = async () => {
-      const videoNodes = Array.from(document.querySelectorAll('video')) as OutputCapableVideoElement[];
+      const videoNodes = Array.from(document.querySelectorAll('video, audio')) as OutputCapableVideoElement[];
       await Promise.allSettled(
         videoNodes.map(async (node) => {
           if (typeof node.setSinkId !== 'function') return;
@@ -373,13 +380,13 @@ export default function RoomPage() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsFullscreen(Boolean(meetingRoot && document.fullscreenElement === meetingRoot));
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
     };
-  }, []);
+  }, [meetingRoot]);
 
   useEffect(() => {
     if (!meetingEnded) return;
@@ -567,13 +574,10 @@ export default function RoomPage() {
 
   const toggleFullscreen = async () => {
     try {
-      if (!document.fullscreenElement) {
-        await stageRef.current?.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch (err) {
-      console.error('Fullscreen error:', err);
+      await toggleMeetingFullscreen(meetingRoot, document);
+      setFullscreenError(null);
+    } catch {
+      setFullscreenError('Unable to enter fullscreen. Use your browser fullscreen option or try again.');
     }
   };
 
@@ -589,21 +593,18 @@ export default function RoomPage() {
     event.preventDefault();
   };
 
-  const sendMessage = (e: React.FormEvent) => {
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageInput.trim()) return;
-
-    const newMessage = {
-      id: Date.now(),
-      sender: 'You',
-      text: messageInput,
-      timestamp: new Date().toLocaleTimeString(),
-    };
-
-    setChatMessages([...chatMessages, newMessage]);
-    setMessageInput('');
-
-    // Emit via socket.io in full implementation
+    if (!messageInput.trim() || chatSendingRef.current) return;
+    const draft = messageInput;
+    chatSendingRef.current = true;
+    setChatSending(true);
+    try {
+      if (await sendChatMessage(draft)) setMessageInput((current) => current === draft ? '' : current);
+    } finally {
+      chatSendingRef.current = false;
+      setChatSending(false);
+    }
   };
 
   const leaveRoom = () => {
@@ -861,7 +862,11 @@ export default function RoomPage() {
   }, [isHost, joinStatus, roomId]);
 
   return (
-    <div className="h-screen bg-[radial-gradient(circle_at_top,#12343b_0%,#0c1722_18%,#09111a_56%,#060c13_100%)] text-white flex flex-col overflow-hidden">
+    <MeetingMediaBoundary room={livekitRoom}>
+    <OverlayPortalContext.Provider value={meetingRoot || undefined}>
+    <div ref={setMeetingRoot} data-meeting-shell className="h-dvh w-full min-h-0 bg-[radial-gradient(circle_at_top,#12343b_0%,#0c1722_18%,#09111a_56%,#060c13_100%)] text-white flex flex-col overflow-hidden">
+      <MeetingPlayback />
+      {fullscreenError ? <div role="alert" className="shrink-0 bg-red-950 px-4 py-2 text-sm">{fullscreenError}</div> : null}
       <Dialog open={needsName} onOpenChange={() => {}}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
@@ -1309,7 +1314,7 @@ export default function RoomPage() {
         </div>
       ) : null}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Main Video Area */}
         <div className="relative flex min-h-0 flex-1 flex-col items-stretch justify-start gap-3 overflow-hidden p-3 sm:p-4">
             {joinStatus !== 'approved' && !needsName && (
@@ -1414,7 +1419,6 @@ export default function RoomPage() {
             )}
           {/* Stage (Pinned) */}
           <div
-            ref={stageRef}
             className={pinnedId ? (isFullscreen ? 'h-full w-full min-h-0' : 'mx-auto flex min-h-0 w-full max-w-7xl flex-1') : 'hidden'}
           >
             <Card
@@ -1438,16 +1442,8 @@ export default function RoomPage() {
                   }}
                 />
               ) : stageStream && stageStream.getVideoTracks().length > 0 ? (
-                <video
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                  ref={(el) => {
-                    if (!el) return;
-                    stageVideoRef.current = el;
-                    if (el.srcObject !== stageStream) el.srcObject = stageStream;
-                  }}
-                />
+                <MeetingVideo userId={pinnedPeer?.userId} stream={stageStream}
+                  screen={Boolean(pinnedPeer?.screenStream)} className="w-full h-full object-contain" />
               ) : pinnedPeer?.connected ? (
                 <div className="w-full h-full bg-[#08101b]/82 flex items-center justify-center">
                   <div className="text-center">
@@ -1594,15 +1590,7 @@ export default function RoomPage() {
                     onClick={() => pinPeer(peerConn.peerId)}
                   >
                     {stream && stream.getVideoTracks().length > 0 ? (
-                      <video
-                        autoPlay
-                        playsInline
-                        className="w-full h-full object-cover"
-                        ref={(el) => {
-                          if (!el) return;
-                          if (el.srcObject !== stream) el.srcObject = stream;
-                        }}
-                      />
+                      <MeetingVideo userId={peerConn.userId} stream={stream} className="w-full h-full object-cover" />
                     ) : peerConn.connected ? (
                       <div className="w-full h-full bg-[#08101b] flex flex-col items-center justify-center">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 mb-2">
@@ -1632,16 +1620,8 @@ export default function RoomPage() {
                       className="relative aspect-video w-80 shrink-0 cursor-pointer overflow-hidden rounded-[22px] border border-cyan-400/30 bg-[#08101b]"
                       onClick={() => pinPeer(peerConn.peerId)}
                     >
-                      <video
-                        autoPlay
-                        playsInline
-                        className="h-full w-full object-contain"
-                        ref={(el) => {
-                          if (el && el.srcObject !== peerConn.screenStream) {
-                            el.srcObject = peerConn.screenStream || null;
-                          }
-                        }}
-                      />
+                      <MeetingVideo userId={peerConn.userId} screen stream={peerConn.screenStream}
+                        className="h-full w-full object-contain" />
                       <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur-md">
                         {peerConn.userData?.name || `Guest ${index + 1}`} · Presenting
                       </div>
@@ -1662,13 +1642,14 @@ export default function RoomPage() {
 
         {/* Chat Sidebar */}
         {(activeSidebarTab === "chat") && (
-          <Card className="w-80 border-l border-white/10 bg-slate-950/72 backdrop-blur-xl flex flex-col rounded-none text-white">
+          <Card className="absolute inset-0 z-40 flex min-h-0 min-w-0 flex-col rounded-none border-l border-white/10 bg-slate-950 text-white md:relative md:inset-auto md:w-80 md:shrink-0">
             <div className="flex items-center justify-between border-b border-white/10 p-4">
               <h3 className="font-semibold">Chat</h3>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setActiveSidebarTab(null)}
+                aria-label="Close chat"
                 className="text-white/55 hover:text-white"
               >
                 ×
@@ -1682,29 +1663,33 @@ export default function RoomPage() {
                 chatMessages.map((msg) => (
                   <div key={msg.id} className="text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-white">{msg.sender}</span>
-                      <span className="text-xs text-white/35">{msg.timestamp}</span>
+                      <span className="min-w-0 break-words font-medium text-white">{msg.senderId === userId ? 'You' : msg.senderName}</span>
+                      <span className="shrink-0 text-xs text-white/35">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                     </div>
-                    <p className="break-words text-white/68">{msg.text}</p>
+                    <p className="whitespace-pre-wrap break-words text-white/70">{msg.message}</p>
                   </div>
                 ))
               )}
             </div>
 
-            <form onSubmit={sendMessage} className="flex gap-2 border-t border-white/10 p-4">
+            {chatError ? <p role="alert" className="px-4 py-2 text-sm text-red-300">{chatError}</p> : null}
+            <form onSubmit={sendMessage} className="flex shrink-0 gap-2 border-t border-white/10 p-4">
               <input
                 type="text"
                 placeholder="Type a message..."
+                aria-label="Chat message"
+                maxLength={2000}
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
-                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35"
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/35"
               />
               <Button
                 type="submit"
+                disabled={chatSending || joinStatus !== 'approved' || !messageInput.trim()}
                 size="sm"
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
-                Send
+                {chatSending ? 'Sending…' : 'Send'}
               </Button>
             </form>
           </Card>
@@ -2246,5 +2231,7 @@ export default function RoomPage() {
         </div>
       ) : null}
     </div>
+    </OverlayPortalContext.Provider>
+    </MeetingMediaBoundary>
   );
 }

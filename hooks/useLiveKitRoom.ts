@@ -21,6 +21,7 @@ import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import { evaluateNetworkSample, type NetworkAdaptationState, type NetworkTier } from '@/lib/mediaNetworkPolicy';
 import { mergeMeetingParticipants } from '@/lib/meetingParticipants';
 import { setMicrophoneEnabledSafely } from '@/lib/microphoneOperation';
+import { useMeetingChat } from './useMeetingChat';
 
 type BackgroundMode = 'none' | 'blur' | 'image';
 type JoinStatus = 'idle' | 'pending' | 'approved' | 'denied' | 'password-required' | 'password-incorrect';
@@ -81,6 +82,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const socketRef = useRef<Socket | null>(null);
   const selfSocketIdRef = useRef<string | null>(null);
   const approvedRef = useRef(false);
+  const { chatMessages, chatError, sendMessage, receiveMessage } = useMeetingChat(roomId, socketRef, approvedRef);
   const pendingJoinRef = useRef<{ userName: string; isHost: boolean; roomPassword?: string; userData?: any } | null>(null);
   const signalingParticipantsRef = useRef<Map<string, SignalingParticipant>>(new Map());
   const hasSignalingSnapshotRef = useRef(false);
@@ -101,6 +103,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const uplinkAdaptationRef = useRef<NetworkAdaptationState>({ tier: 'excellent', candidateTier: null, candidateSamples: 0, healthySamples: 0 });
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [livekitRoom, setLivekitRoom] = useState<Room | undefined>(undefined);
   const [peers, setPeers] = useState<PeerView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
@@ -250,6 +253,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       },
     });
     roomRef.current = room;
+    setLivekitRoom(room);
 
     room.on(RoomEvent.TrackSubscribed, syncRemoteParticipants);
     room.on(RoomEvent.TrackUnsubscribed, syncRemoteParticipants);
@@ -553,6 +557,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     microphoneWantedRef.current = false; cameraWantedRef.current = false;
     const room = roomRef.current;
     roomRef.current = null;
+    setLivekitRoom(undefined);
     room?.disconnect();
     setLocalStream(null);
     setPeers([]);
@@ -573,6 +578,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       reconnectionDelayMax: 5000,
     });
     socketRef.current = socket;
+    socket.on('receive-message', receiveMessage);
 
     const emitPendingJoin = () => {
       selfSocketIdRef.current = socket.id || null;
@@ -662,7 +668,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       socket.removeAllListeners(); socket.disconnect(); socketRef.current = null;
       disconnectMedia();
     };
-  }, [config.enabled, config.signalingServer, disconnectMedia, roomId, syncLocalStream, syncRemoteParticipants, userId]);
+  }, [config.enabled, config.signalingServer, disconnectMedia, receiveMessage, roomId, syncLocalStream, syncRemoteParticipants, userId]);
 
   const emit = useCallback((event: string, payload: object) => socketRef.current?.emit(event, payload), []);
   const requestJoin = useCallback((payload: { userName: string; isHost: boolean; roomPassword?: string; userData?: any }) => {
@@ -787,6 +793,8 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   }, [applySubscriptionPolicy]);
 
   return {
+    livekitRoom,
+    chatMessages, chatError, sendMessage,
     localStream, peers, error, isCameraOn, isMicOn, isScreenSharing, joinStatus,
     pendingRequests, isHost, unmuteRequests, isMutedByHost, unmuteRequested,
     raisedHands, isHandRaised, backgroundMode, backgroundImage, isLowDataMode,

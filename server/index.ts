@@ -35,6 +35,7 @@ import { checkObjectStorageHealth, enforceRecordingRetention } from './services/
 import { writeAuditLog } from './services/audit';
 import { activeParticipants, activeRooms, metricsRegistry, networkQualityReports } from './services/metrics';
 import { mediaProviderForRoom, meshIceServersFromEnvironment } from './services/mediaProvider';
+import { registerMeetingChat } from './services/meetingChat';
 
 dotenv.config();
 
@@ -261,6 +262,11 @@ io.on('connection', (socket) => {
       });
       return;
     }
+
+    // Preserve the existing verified request-join token fallback for subsequent
+    // application events as well as handshake cookie authentication.
+    authenticatedUserId = effectiveAuthenticatedUserId;
+    authenticatedGuestRoomId = effectiveGuestRoomId;
 
     try {
       const roomResult = await pool.query('SELECT creator_id, ended_at, password_hash, is_locked FROM rooms WHERE id = $1', [roomId]);
@@ -717,17 +723,7 @@ io.on('connection', (socket) => {
     io.to(targetSocketId).emit('receive-ice-candidate', { socketId: socket.id, candidate });
   });
 
-  // Chat message
-  socket.on('send-message', (data: any) => {
-    const { roomId, message, senderName, timestamp } = data;
-    if (!roomId || !isParticipant(roomId, socket.id)) return;
-    io.to(roomId).emit('receive-message', {
-      socketId: socket.id,
-      message,
-      senderName,
-      timestamp: timestamp || new Date().toISOString(),
-    });
-  });
+  registerMeetingChat(io, socket, roomManager, () => authenticatedUserId);
 
   // User toggles camera
   socket.on('toggle-camera', (data: any) => {

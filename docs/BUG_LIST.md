@@ -38,6 +38,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
 ## Laptop — reported bug
 
 - [ ] **BUG-04 — Fullscreen করলে controls কাজ করে না**
+  - Local progress (2026-11-11): pinned stage-এর বদলে meeting-shell fullscreen ও scoped popup portals implemented; `pnpm check` passed। Fixture-এ popup containment verified, তবে native fullscreen request browser denied করেছে। Real laptop/Safari fullscreen এবং SFU media test pending; [M04 evidence](M04_FULLSCREEN.md)।
   - Report: laptop-এ fullscreen করার পরে আর কিছু কাজ করে না।
   - Expected: microphone, camera, chat, participants, share, leave এবং exit-fullscreen controls accessible ও usable থাকবে।
   - Verify: app fullscreen button, video-tile fullscreen এবং browser fullscreen আলাদা করে পরীক্ষা; panel/modal খোলা ও fullscreen থেকে ফেরার আচরণও পরীক্ষা।
@@ -77,6 +78,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
 ## Audio, chat ও sharing — handwritten report
 
 - [ ] **BUG-11 — Chat কাজ করে না**
+  - Local progress (2026-11-11): UI শুধু local list-এ append করত; socket send/receive wiring ও server-owned sender/acknowledgement যোগ হয়েছে। Real loopback transport/client-state tests ও `pnpm check` pass; production/browser retest pending। [M05 evidence](M05_CHAT.md)।
   - Report: chat is not working।
   - Expected: host ও admitted guest দুই দিকেই message send/receive করতে পারবেন।
   - Verify: delivery, sender name, ordering এবং reconnect-এর পর নতুন message আদান-প্রদান পরীক্ষা।

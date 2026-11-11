@@ -759,7 +759,7 @@ The waiting room is the authorisation gate for media, not just a UI step.
 | `request-unmute` | `{ roomId, userId, userData }` | participant |
 | `approve-unmute` | `{ roomId, targetSocketId }` | host / co-host |
 | `deny-unmute` | `{ roomId, targetSocketId }` | host / co-host |
-| `send-message` | `{ roomId, message, senderName, timestamp? }` | participant |
+| `send-message` | `{ roomId, message, clientMessageId? }`, optional acknowledgement callback | authenticated, admitted visible participant |
 | `toggle-camera` | `{ roomId, enabled }` | participant |
 | `toggle-microphone` | `{ roomId, enabled }` | participant |
 | `network-quality` | `{ roomId, quality }` | participant |
@@ -817,7 +817,7 @@ room status, and existing waiting-room approval.
 
 | Event | Payload |
 |---|---|
-| `receive-message` | `{ socketId, message, senderName, timestamp }` |
+| `receive-message` | `{ id, roomId, socketId, senderId, message, senderName, timestamp }` — server-generated identity/id/time; broadcast includes sender |
 | `user-camera-toggled` | `{ socketId, enabled }` |
 | `user-microphone-toggled` | `{ socketId, enabled }` |
 | `user-screen-share-started` | `{ socketId, offer }` — mesh only |
@@ -831,6 +831,34 @@ room status, and existing waiting-room approval.
 > replacement and broadcasts `host-changed`. When the original creator
 > reconnects, they reclaim host automatically — a temporary fallback host does not
 > permanently own the meeting.
+
+### Chat delivery semantics
+
+`send-message` requires authenticated socket identity matching an admitted,
+non-hidden/non-recorder `RoomManager` participant and actual socket room membership.
+Identity is established by handshake authentication or the existing JWT-verified
+`request-join` token fallback, not by a chat payload's identity fields.
+The message must be a string, non-empty after trimming and at most 2,000 UTF-16
+code units before trimming. `senderName`, `senderId`, `timestamp` or `id` supplied
+by the client do not override the server's admitted display name, identity,
+timestamp or generated message ID. Existing callers may omit `clientMessageId`;
+legacy sender/time fields are ignored.
+
+Acknowledgement is `{ ok: true, id }` on accepted broadcast, or
+`{ ok: false, error }` on validation, membership or rate-limit failure. Success
+confirms server acceptance, not that every peer displayed/read the message.
+At most 20 new messages per socket per 10-second window are accepted. Optional
+`clientMessageId` is 1–100 ASCII word/hyphen characters; the latest 200 accepted
+request IDs per socket are deduplicated within their room (same ID returns the
+original acknowledgement without rebroadcast). This cache resets on disconnect.
+
+Clients render the server echo, deduplicate event IDs and retain the latest
+200 messages locally. New sends require connected/admitted state and use a
+five-second acknowledgement timeout. Drafts remain on failure; do not blindly
+retry an ambiguous timeout, because the first send may have reached peers.
+There is no automatic offline queue, durable history, late-join history or
+missed-message replay. Existing in-page history survives a transient reconnect;
+refresh/room change discards it. Chat text is rendered as plain text, not HTML.
 
 ---
 

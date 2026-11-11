@@ -134,18 +134,18 @@ Status: Step 2 local lifecycle fix and automated checks complete (2026-11-10); S
 
 ### M04 — BUG-04: Laptop fullscreen controls
 
-Status: Not started. Estimate: **4.5–8.5 h**.
+Status: Local implementation and automated checks complete (2026-11-11); source-level fullscreen fault confirmed. Native browser fullscreen request was denied during fixture testing; real laptop/Safari and media acceptance remain pending. M04 remains open. Estimate: **4.5–8.5 h** plus the previously listed shared integration allowance. Evidence: [M04_FULLSCREEN.md](M04_FULLSCREEN.md).
 
 - [ ] **Step 1 — Verify (1–2 h):** App, tile ও browser fullscreen আলাদা করে local reproduce; fullscreen element, dialog/menu placement ও pointer/focus পরীক্ষা। Server check কেবল deployed build আলাদা হলে। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h + shared integration allowance-এর প্রযোজ্য অংশ):** Verified fullscreen fault fix-এর সঙ্গে shared LiveKit component foundation শুরু: existing Room instance provider/context-এ expose, SDK-compatible track/audio rendering prototype এবং TSMeet toolbar/sidebar integration। Fullscreen root ও dialog/menu portal container, focus/exit controls ঠিক করা; double connection/audio নয়। M10–M12 reuse করবে। Relevant regression test ও `pnpm check` চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (2–4 h + shared integration allowance-এর প্রযোজ্য অংশ):** Local meeting-shell fullscreen target, scoped dialog/sheet/menu/select portals এবং request-error feedback implemented। Existing RoomContext reuse, remote VideoTrack ও single RoomAudioRenderer/StartAudio foundation যোগ হয়েছে; local preview ও manual subscription policy অপরিবর্তিত। `pnpm check` passed; synthetic browser popup containment checks passed। Native fullscreen ও actual audio/video acceptance pending—এগুলো passed দাবি নয়। M10–M12 layout/name migration এখনও বাকি। [Evidence](M04_FULLSCREEN.md)।
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Fullscreen-এর ভিতর mic/camera, chat, participant panel, share, leave এবং exit controls কাজ করে। Result ও commit reference record হলে step complete।
 
 ### M05 — BUG-11: Chat delivery
 
-Status: Not started. Estimate: **4.5–8.5 h**.
+Status: Local cause verified; Step 2 implementation and automated checks complete (2026-11-11). Real browser/production acceptance and deployment pending; M05 remains open. Estimate: **4.5–8.5 h**. Evidence: [M05_CHAT.md](M05_CHAT.md).
 
 - [ ] **Step 1 — Verify (1–2 h):** Host ও guest দুই দিকের local delivery পরীক্ষা; server-only হলে socket authorization, room membership, event delivery ও reconnect পরীক্ষা। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h):** Confirmed event/state/rendering issue fix; sender identity ও room authorization বজায় রাখা। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (2–4 h):** Local-only UI append-এর বদলে shared Socket.IO send/receive wiring, server echo, admitted sender identity/time, validation, acknowledgement/error feedback ও bounded/deduplicated live history implemented। Offline failure-এ draft থাকে; no persistent history/replay। Real loopback Socket.IO integration এবং client-state tests passed; `pnpm check` passed (lint 0 errors, 10 existing warnings, typecheck, all tests, production build)। API contract updated। Real-client acceptance এখনও pending।
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: দুই দিকেই message যায়; duplicate নেই; reconnect-এর পরে নতুন message যায় এবং sender readable। Result ও commit reference record হলে step complete।
 
 ### M06 — BUG-06: Video blinking / instability

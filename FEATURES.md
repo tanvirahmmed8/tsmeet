@@ -22,12 +22,14 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Gallery layout | Available | Grid of participants |
 | Active-speaker layout | Available | Current speaker on stage |
 | Pinned participant | Available | Pin from the participants panel |
+| Meeting-shell fullscreen | Implemented; production/device retest pending | Fullscreen includes toolbar and scoped popup portals in gallery/focus views |
+| SDK remote track rendering | Implemented; real-media retest pending | Existing LiveKit Room reused with VideoTrack and one RoomAudioRenderer; local preview remains custom |
 | Hide your own tile | Available | Local only; others still see you |
 | Screen sharing | Available | Tab, window, or entire screen |
 | Screen share with system audio | Available | Browser- and target-dependent |
 | Adaptive video quality | Available | Reacts to measured network conditions |
 | Low-data mode | Available | For constrained connections |
-| In-meeting chat | Available | Text chat over Socket.IO |
+| In-meeting chat | Implemented; production/device retest pending | Room-scoped Socket.IO server echo with admitted sender identity, acknowledgement/error feedback and bounded live history; no offline replay or persistent history |
 | Hand raising | Available | With host visibility |
 | Participant status indicators | Available | Mute, camera, hand, host badges |
 | Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated. After a server roster snapshot, stale media cannot add departed/removed attendees back to the count |

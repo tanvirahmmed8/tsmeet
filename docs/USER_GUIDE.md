@@ -131,6 +131,20 @@ compact toolbar.
 
 ---
 
+## In-meeting chat
+
+Open **Chat** (or **More → Open chat** on a small screen). Messages are shared
+with the current meeting after admission. Each message can contain up to 2,000
+UTF-16 code units; frequent sends may be temporarily limited. The sender sees
+the server echo rather than a local placeholder. On a send error, the draft
+stays available. If delivery cannot be confirmed, check the conversation before
+retrying to avoid a duplicate.
+
+Chat keeps only the latest 200 messages in the current page. Refresh/room change
+clears it; late joiners and disconnected clients do not receive missed history.
+
+---
+
 ## Sharing your screen
 
 <p align="center">

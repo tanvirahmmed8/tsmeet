@@ -26,5 +26,5 @@ export function useMeetingMedia(
     enabled: provider === 'mesh',
   });
 
-  return provider === 'mesh' ? mesh : livekit;
+  return provider === 'mesh' ? { ...mesh, livekitRoom: undefined } : livekit;
 }
