@@ -44,6 +44,7 @@ type CalendarSummary = {
   timezone: string;
   confirmationMessage: string;
   settings: {
+    calendarType: 'personal' | 'event' | 'round_robin';
     slotDurationMinutes: number;
     slotIntervalMinutes: number;
     bufferBeforeMinutes: number;
@@ -59,10 +60,13 @@ type CalendarSummary = {
     shareEnabled: boolean;
     allowCancellation: boolean;
     allowRescheduling: boolean;
+    recurringBookingsEnabled: boolean;
+    maxRecurringBookings: number;
     customFields: Array<Record<string, any>>;
   };
   bookingForm: { fields: Array<Record<string, any>> };
   shareUrl: string;
+  personalMeetingUrl?: string | null;
   embedUrl: string;
   embedCode: string;
   createdAt?: string;
@@ -168,6 +172,8 @@ function createCalendarPayload(form: typeof initialForm, availability: Record<st
       shareEnabled: form.shareEnabled,
       allowCancellation: form.allowCancellation,
       allowRescheduling: form.allowRescheduling,
+      recurringBookingsEnabled: form.recurringBookingsEnabled,
+      maxRecurringBookings: Number(form.maxRecurringBookings),
       customFields: fields.map((field) => ({ ...field })),
     },
     bookingForm: {
@@ -194,6 +200,8 @@ const initialForm = {
   shareEnabled: true,
   allowCancellation: true,
   allowRescheduling: false,
+  recurringBookingsEnabled: false,
+  maxRecurringBookings: '12',
 };
 
 export function CalendarManager() {
@@ -646,6 +654,7 @@ export function CalendarManager() {
                     ['shareEnabled', 'Share enabled'],
                     ['allowCancellation', 'Allow cancellation'],
                     ['allowRescheduling', 'Allow rescheduling'],
+                    ['recurringBookingsEnabled', 'Allow recurring bookings'],
                   ].map(([key, label]) => (
                     <label key={key} className="flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
                       <input
@@ -658,6 +667,19 @@ export function CalendarManager() {
                   ))}
                 </div>
               </div>
+
+              {createForm.recurringBookingsEnabled ? (
+                <div className="max-w-xs space-y-2">
+                  <label className="text-sm font-medium text-foreground">Maximum recurring meetings</label>
+                  <Input
+                    type="number"
+                    min="2"
+                    max="12"
+                    value={createForm.maxRecurringBookings}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, maxRecurringBookings: event.target.value }))}
+                  />
+                </div>
+              ) : null}
 
               <div className="grid lg:grid-cols-2 gap-4">
                 <Card className="p-4 border-primary/10 bg-background/50">
@@ -841,6 +863,7 @@ export function CalendarManager() {
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Badge variant="secondary">Public share</Badge>
+                  {selectedDetails.settings.calendarType === 'personal' ? <Badge variant="outline">Personal meeting link</Badge> : null}
                   <Badge variant="outline">Embed ready</Badge>
                   <Badge variant="outline">Booking API</Badge>
                 </div>
@@ -890,6 +913,12 @@ export function CalendarManager() {
                     <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">Share URL</p>
                     <p className="text-sm break-all text-foreground">{selectedDetails.shareUrl}</p>
                   </Card>
+                  {selectedDetails.settings.calendarType === 'personal' ? (
+                    <Card className="p-4 border-border bg-background/50">
+                      <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">Personal meeting link</p>
+                      <p className="text-sm break-all text-foreground">{selectedDetails.personalMeetingUrl || selectedDetails.shareUrl}</p>
+                    </Card>
+                  ) : null}
                   <Card className="p-4 border-border bg-background/50">
                     <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">Embed URL</p>
                     <p className="text-sm break-all text-foreground">{selectedDetails.embedUrl}</p>

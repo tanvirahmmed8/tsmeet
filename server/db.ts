@@ -345,6 +345,9 @@ export const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS calendar_bookings (
         id CHAR(36) PRIMARY KEY,
         calendar_id CHAR(36) NOT NULL,
+        series_id CHAR(36) NULL,
+        series_index INT NULL,
+        recurrence JSON NULL,
         assigned_user_id INT NULL,
         assigned_user_name VARCHAR(191) NULL,
         assigned_user_email VARCHAR(191) NULL,
@@ -371,6 +374,9 @@ export const initializeDatabase = async () => {
     await addColumnIfMissing('calendar_bookings', 'assigned_user_id', 'INT NULL');
     await addColumnIfMissing('calendar_bookings', 'assigned_user_name', 'VARCHAR(191) NULL');
     await addColumnIfMissing('calendar_bookings', 'assigned_user_email', 'VARCHAR(191) NULL');
+    await addColumnIfMissing('calendar_bookings', 'series_id', 'CHAR(36) NULL');
+    await addColumnIfMissing('calendar_bookings', 'series_index', 'INT NULL');
+    await addColumnIfMissing('calendar_bookings', 'recurrence', 'JSON NULL');
 
     await createIndexIfMissing('calendars', 'idx_calendars_creator_id', 'creator_id');
     await createIndexIfMissing('calendars', 'idx_calendars_slug', 'slug');
@@ -378,6 +384,7 @@ export const initializeDatabase = async () => {
     await createIndexIfMissing('calendar_holidays', 'idx_calendar_holidays_calendar_id', 'calendar_id');
     await createIndexIfMissing('calendar_bookings', 'idx_calendar_bookings_calendar_id', 'calendar_id');
     await createIndexIfMissing('calendar_bookings', 'idx_calendar_bookings_slot_start_at', 'slot_start_at');
+    await createIndexIfMissing('calendar_bookings', 'idx_calendar_bookings_series_id', 'series_id');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS recordings (

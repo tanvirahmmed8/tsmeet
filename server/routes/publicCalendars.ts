@@ -9,11 +9,14 @@ import {
   buildEmbedUrl,
   buildPublicCalendarUrl,
   buildMeetingUrl,
+  buildRecurringSlotStarts,
   formatReminderSchedule,
+  formatDateString,
   generateCalendarSlots,
   normalizeBookingResponse,
   normalizeBookingForm,
   normalizeCalendarSettings,
+  normalizeRecurrence,
   renderTemplate,
   selectRoundRobinAssignee,
   toApiCalendar,
@@ -110,52 +113,91 @@ router.post('/:slug/bookings', async (req: Request, res: Response) => {
     }
 
     const settings = normalizeCalendarSettings(calendar.settings);
-    const { slotStartAt, bookerName, bookerEmail = '', responses = {}, confirmationMessage } = req.body || {};
+    const {
+      slotStartAt,
+      bookerName,
+      bookerEmail = '',
+      responses = {},
+      confirmationMessage,
+      recurrence,
+    } = req.body || {};
     if (!slotStartAt || !bookerName) {
       return res.status(400).json({ error: 'Missing required fields: slotStartAt and bookerName' });
     }
 
-    const slotStart = new Date(slotStartAt);
-    if (Number.isNaN(slotStart.getTime())) {
+    const requestedRecurrence = normalizeRecurrence(recurrence, settings.maxRecurringBookings);
+    if (recurrence && !settings.recurringBookingsEnabled) {
+      return res.status(400).json({ error: 'Recurring bookings are not enabled for this calendar' });
+    }
+    if (recurrence && !requestedRecurrence) {
+      return res.status(400).json({ error: 'Invalid recurrence. Use daily or weekly frequency and a count from 2 to 12.' });
+    }
+
+    const slotStarts = buildRecurringSlotStarts(slotStartAt, requestedRecurrence, calendar.timezone);
+    if (slotStarts.length === 0) {
       return res.status(400).json({ error: 'Invalid slotStartAt' });
     }
 
-    const slotEnd = new Date(slotStart.getTime() + settings.slotDurationMinutes * 60 * 1000);
-    const date = slotStart.toISOString().slice(0, 10);
     const related = await loadCalendarData(calendar.id);
-    const generated = generateCalendarSlots({
-      calendar,
-      disabledSlots: related.disabledSlots,
-      holidays: related.holidays,
-      bookings: related.bookings,
-      date,
-    });
+    const plannedBookings: BookingRecord[] = [];
+    const slotPlans: Array<{ slotStart: Date; slotEnd: Date; assignee: ReturnType<typeof selectRoundRobinAssignee> }> = [];
+    for (const slotStart of slotStarts) {
+      const slotEnd = new Date(slotStart.getTime() + settings.slotDurationMinutes * 60 * 1000);
+      const date = formatDateString(slotStart, calendar.timezone);
+      const bookingsForCheck = [...related.bookings, ...plannedBookings];
+      const generated = generateCalendarSlots({
+        calendar,
+        disabledSlots: related.disabledSlots,
+        holidays: related.holidays,
+        bookings: bookingsForCheck,
+        date,
+      });
+      const matchingSlot = generated.slots.find((slot) => slot.startAt === slotStart.toISOString() && slot.status === 'available');
+      if (!matchingSlot) {
+        return res.status(409).json({ error: `Selected recurring slot is not available: ${slotStart.toISOString()}` });
+      }
 
-    const matchingSlot = generated.slots.find((slot) => slot.startAt === slotStart.toISOString() && slot.status === 'available');
-    if (!matchingSlot) {
-      return res.status(409).json({ error: 'Selected slot is not available' });
+      const dailyBookingCount = bookingsForCheck.filter(
+        (booking: BookingRecord) => booking.status === 'confirmed' && formatDateString(new Date(booking.slot_start_at), calendar.timezone) === date
+      ).length;
+      if (settings.dailySlotLimit > 0 && dailyBookingCount >= settings.dailySlotLimit) {
+        return res.status(409).json({ error: `Daily booking limit reached for ${date}` });
+      }
+
+      const assignee = settings.calendarType === 'round_robin'
+        ? selectRoundRobinAssignee(settings, bookingsForCheck, slotStart.toISOString(), slotEnd.toISOString(), calendar.timezone)
+        : null;
+      if (settings.calendarType === 'round_robin' && !assignee) {
+        return res.status(409).json({ error: `No round-robin member is available for ${slotStart.toISOString()}` });
+      }
+      slotPlans.push({ slotStart, slotEnd, assignee });
+      plannedBookings.push({
+        id: `planned-${slotStart.toISOString()}`,
+        calendar_id: calendar.id,
+        slot_start_at: slotStart.toISOString(),
+        slot_end_at: slotEnd.toISOString(),
+        status: 'confirmed',
+        booker_name: String(bookerName),
+      });
     }
 
-    const dailyBookingCount = related.bookings.filter(
-      (booking: BookingRecord) => booking.status === 'confirmed' && booking.slot_start_at.slice(0, 10) === date
-    ).length;
-    if (settings.dailySlotLimit > 0 && dailyBookingCount >= settings.dailySlotLimit) {
-      return res.status(409).json({ error: 'Daily booking limit reached' });
-    }
-
-    const bookingId = uuidv4();
     const confirmation = confirmationMessage || calendar.confirmation_message || 'Your booking is confirmed.';
     const reminderOffsets = settings.reminderOffsetsMinutes || [10, 5, 1];
-    const reminderSchedule = formatReminderSchedule(slotEnd.toISOString(), reminderOffsets);
-    const meetingUrl = buildMeetingUrl(bookingId);
-    const roundRobinAssignee = settings.calendarType === 'round_robin'
-      ? selectRoundRobinAssignee(settings, related.bookings, slotStart.toISOString(), slotEnd.toISOString(), calendar.timezone)
-      : null;
-
-    const result = await pool.query(
+    const seriesId = requestedRecurrence ? uuidv4() : null;
+    const bookings: any[] = [];
+    const insertedBookingIds: string[] = [];
+    try {
+      for (const [index, plan] of slotPlans.entries()) {
+        const bookingId = uuidv4();
+        const meetingUrl = buildMeetingUrl(bookingId);
+        const reminderSchedule = formatReminderSchedule(plan.slotEnd.toISOString(), reminderOffsets);
+        const result = await pool.query(
       `INSERT INTO calendar_bookings (
         id,
         calendar_id,
+        series_id,
+        series_index,
+        recurrence,
         assigned_user_id,
         assigned_user_name,
         assigned_user_email,
@@ -170,16 +212,19 @@ router.post('/:slug/bookings', async (req: Request, res: Response) => {
         confirmation_message,
         reminder_offsets,
         reminder_schedule
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', $8, $9, $10::jsonb, $11, $12, $13, $14::jsonb, $15::jsonb)
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, 'confirmed', $11, $12, $13::jsonb, $14, $15, $16, $17::jsonb, $18::jsonb)
       RETURNING *`,
       [
         bookingId,
         calendar.id,
-        roundRobinAssignee?.id ?? null,
-        roundRobinAssignee?.name ?? null,
-        roundRobinAssignee?.email ?? null,
-        slotStart.toISOString(),
-        slotEnd.toISOString(),
+        seriesId,
+        requestedRecurrence ? index : null,
+        requestedRecurrence ? JSON.stringify(requestedRecurrence) : null,
+        plan.assignee?.id ?? null,
+        plan.assignee?.name ?? null,
+        plan.assignee?.email ?? null,
+        plan.slotStart.toISOString(),
+        plan.slotEnd.toISOString(),
         bookerName,
         bookerEmail,
         JSON.stringify(normalizeBookingResponse(responses)),
@@ -188,21 +233,36 @@ router.post('/:slug/bookings', async (req: Request, res: Response) => {
         renderTemplate(confirmation, {
           bookerName: String(bookerName),
           calendarTitle: calendar.title,
-          slotStartAt: slotStart.toISOString(),
-          slotEndAt: slotEnd.toISOString(),
+          slotStartAt: plan.slotStart.toISOString(),
+          slotEndAt: plan.slotEnd.toISOString(),
           meetingUrl,
           shareUrl: buildPublicCalendarUrl(calendar.slug),
         }),
         JSON.stringify(reminderOffsets),
         JSON.stringify(reminderSchedule),
       ]
-    );
+        );
+        insertedBookingIds.push(bookingId);
+        bookings.push(result.rows[0]);
+      }
+    } catch (error) {
+      if (insertedBookingIds.length > 0) {
+        const placeholders = insertedBookingIds.map((_id, index) => `$${index + 1}`).join(', ');
+        await pool.query(`DELETE FROM calendar_bookings WHERE id IN (${placeholders})`, insertedBookingIds).catch((cleanupError) => {
+          console.error('Failed to roll back recurring booking series:', cleanupError);
+        });
+      }
+      throw error;
+    }
 
     res.status(201).json({
-      booking: result.rows[0],
-      meetingUrl,
-      confirmationMessage: result.rows[0].confirmation_message,
-      reminders: reminderSchedule,
+      booking: bookings[0],
+      bookings,
+      meetingUrl: bookings[0]?.meeting_url,
+      meetingUrls: bookings.map((booking) => booking.meeting_url),
+      seriesId,
+      confirmationMessage: bookings[0]?.confirmation_message,
+      reminders: formatReminderSchedule(slotPlans[0].slotEnd.toISOString(), reminderOffsets),
     });
   } catch (error) {
     console.error('Create public booking error:', error);

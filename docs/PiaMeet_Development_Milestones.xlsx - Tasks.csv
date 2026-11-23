@@ -1,0 +1,71 @@
+SL,Module,Tasks,Estimation (hr),Actual Hour,Assign To,Start date,End date,Status,Remarks
+1,Phase 1 — Safari Compatibility,"Fix Safari microphone controls, participant count and unexpected logout",8,7,Tanvir,09-Nov-2026,10-Nov-2026,In Progress,"RND need to Doc: problem, use case,existing solution. proposed technical solution"
+2,Phase 1 — Meeting UI,"Fix fullscreen toolbar, layout sizing and participant name visibility",10,,Tanvir,10-Nov-2026,,Not Started,
+3,Phase 1 — Meeting Chat,"Fix message delivery, synchronization and reconnect handling",8,,Tanvir,,,Not Started,
+4,Phase 1 — Audio/Video,"Investigate video flicker, audio-video synchronization and call quality",12,,Motiur vai,,,Not Started,
+5,Phase 1 — Screen Sharing,Resolve screen-share reliability and browser compatibility issues,8,,Tanvir,,,Not Started,
+6,Phase 1 — Meeting Roles,Fix co-host permission and moderator control visibility,6,,Tanvir,,,Not Started,
+7,Phase 1 — Network Optimization,Retest adaptive media and low-data mode across network conditions,10,,,,,Not Started,
+8,Phase 1 — Virtual Background,Verify blur/image processor on supported browsers and devices,8,,,,,Not Started,
+9,Phase 1 — Meeting Spotlight,Implement host-controlled spotlight and participant focus,10,,,,,Not Started,
+10,Phase 1 — Regression Testing,Cross-browser end-to-end regression for existing meeting features,12,,,,,Not Started,
+11,Phase 2 — Recording,Configure LiveKit Egress and MinIO/S3-compatible storage,12,,Tanvir,,,Not Started,
+12,Phase 2 — Recording,"Validate recording lifecycle, permissions and download flow",8,,,,,Not Started,
+13,Phase 2 — Emoji Reactions,In-meeting emoji reactions with real-time delivery,6,,,,,Not Started,
+14,Phase 2 — Meeting Polls,"Host poll creation, participant voting and result view",12,,,,,Not Started,
+15,Phase 2 — Whiteboard,Shared collaborative whiteboard and basic annotation tools,24,,Shehan,,,Not Started,
+16,Phase 2 — Breakout Rooms,Host creates/assigns/moves participants between breakout rooms,24,,Tanvir,,,Not Started,
+17,Phase 2 — Meeting Scheduling,Recurring meetings and personal meeting link workflow,12,8,Tanvir,22-Nov-2026,,Local Complete — Deployment Pending,"Implemented stable personal calendar link, daily/weekly recurring booking series (2–12 bounded occurrences), per-occurrence meeting URLs, timezone-safe expansion, availability/capacity validation, schema migration, UI controls, API/docs and calendar-service tests. Production deployment and live booking acceptance remain pending."
+18,Phase 2 — Meeting Invitations,Single-use invitation link issuance and redemption,12,,,,,Not Started,
+19,Phase 2 — Team Chat,Persistent private/group conversations with search,26,,,,,Not Started,
+20,Phase 2 — Chat Attachments,Upload and download meeting/team chat files,12,,,,,Not Started,
+21,Phase 2 — Booking Improvements,Complete appointment rescheduling and email reminders,14,,,,,Not Started,
+22,Phase 2 — Collaboration QA,Functional and usability test of collaboration features,12,,,,,Not Started,
+23,Phase 3 — AI Foundation,"Define AI architecture, consent, data retention and model configuration",10,,,,,Not Started,
+24,Phase 3 — Speech-to-Text,Integrate live speech transcription service,20,,,,,Not Started,
+25,Phase 3 — Live Captions,Display synchronized live captions with on/off controls,12,,,,,Not Started,
+26,Phase 3 — Multilingual Subtitles,Language selection and translated live captions,18,,,,,Not Started,
+27,Phase 3 — AI Meeting Summary,Generate meeting minutes and concise summaries,16,,,,,Not Started,
+28,Phase 3 — Action Items,"Extract tasks, owners and suggested due dates",12,,,,,Not Started,
+29,Phase 3 — Speaker Attribution,Speaker-tagged transcript and meeting timeline,16,,,,,Not Started,
+30,Phase 3 — Transcript Review,"Search, edit and export transcripts/meeting notes",16,,,,,Not Started,
+31,Phase 3 — AI Noise Reduction,Assess and integrate supported noise-reduction approach,16,,Motiur vai,,,Not Started,
+32,Phase 3 — AI QA,"Evaluate Bangla/English accuracy, latency and cost with real meetings",18,,,,,Not Started,
+33,Phase 4 — Organization Workspace,Tenant and organization administration with department roles,24,,,,,Not Started,
+34,Phase 4 — Role Permissions,Organization-level RBAC and granular access policy,18,,,,,Not Started,
+35,Phase 4 — Enterprise Login,SSO/SAML/OIDC integration and account provisioning,20,,,,,Not Started,
+36,Phase 4 — Multi-Factor Auth,"MFA enrollment, verification and recovery workflow",16,,,,,Not Started,
+37,Phase 4 — Security Policies,Meeting access rules for IP/domain/country where appropriate,18,,,,,Not Started,
+38,Phase 4 — Audit & Governance,Extend security audit events and retention policies,16,,,,,Not Started,
+39,Phase 4 — Deployment Settings,White-label configuration for branding and organization settings,16,,,,,Not Started,
+40,Phase 4 — Encryption Review,Review security model and E2EE feasibility with recording/AI trade-offs,12,,,,,Not Started,
+41,Phase 4 — Admin QA,Security and permission testing across organization roles,16,,,,,Not Started,
+42,Phase 5 — Capacity Planning,Define concurrency targets and infrastructure assumptions,8,,,,,Not Started,
+43,Phase 5 — Load Testing,Run repeatable tests at selected participant/concurrency levels,16,,,,,Not Started,
+44,Phase 5 — Backend Scaling,Review RoomManager state and multi-node architecture,18,,,,,Not Started,
+45,Phase 5 — Deployment Automation,"Production configuration, backups and monitoring",16,,,,,Not Started,
+46,Phase 5 — Security Testing,"Authentication, permissions, application and API security review",16,,,,,Not Started,
+47,Phase 5 — Release Readiness,Resolve blocking findings and complete acceptance testing,20,,,,,Not Started,
+48,Phase 5 — Documentation,"Admin guide, user guide, support and deployment documentation",12,,,,,Not Started,
+49,Phase 5 — Go-Live,"Staged release, monitoring and rollback validation",10,,,,,Not Started,
+50,Phase 6 — Security Remediation (F-01),"Restrict room-details access by owner/admission state; replace SELECT * with safe projections; exclude password_hash from details and owner lists",12,,Tanvir,,,Confirmed — High,"Source-confirmed in preliminary-security-assessment.pdf; add owner, admitted guest, waiting guest, cross-account and field-exclusion tests"
+51,Phase 6 — Security Remediation (F-02),"Make password validation byte-aware for bcrypt and define legacy-password compatibility/migration behaviour",8,,Tanvir,,,Confirmed — Medium,"bcrypt accepts only 72 UTF-8 bytes; test ASCII and multi-byte passwords without breaking existing accounts"
+52,Phase 6 — Infrastructure Security (F-03),"Replace MySQL root runtime access with a least-privilege application user and separate migration identity; remove password interpolation from healthchecks",10,,Tanvir,,,Confirmed — Medium,"Docker configuration finding; validate startup, migrations and restore before rollout"
+53,Phase 6 — Abuse Protection (F-04),"Add per-account, per-room and per-connection join-attempt throttling with reconnect-safe limits and monitoring",8,,Tanvir,,,Confirmed gap — Medium,"Socket.IO request-join is outside current REST rate limits; do not use a global proxy bucket"
+54,Phase 6 — Session Security (F-05),"Design revocable sessions or short-lived access plus revocable refresh credentials; document logout and token-expiry behaviour",10,,Tanvir,,,Confirmed gap — Low,"Existing seven-day JWTs are not revoked by logout; test stolen-token, logout and expiry scenarios"
+55,Phase 6 — Browser Security (F-06),"Harden CSP by removing unsafe-eval/unsafe-inline where compatible and restricting connect-src to required origins",8,,Tanvir,,,Confirmed hardening gap — Low,"No XSS was established; run browser regression after CSP changes"
+56,Phase 6 — Request Integrity (F-07),"Add Origin validation and/or CSRF protection for cookie-authenticated state-changing routes, with explicit SameSite policy",10,,Tanvir,,,Partial gap — Low,"SameSite=Lax is present but no common write protection; test same-site and cross-site requests"
+57,Phase 6 — Recording Security (F-08),"Before enabling recorder uploads, authenticate before body buffering and enforce streaming size/concurrency limits",8,,Tanvir,,,Conditional gap — Medium,"Recorder router is dormant/unmounted; keep disabled until this control is implemented"
+58,Phase 6 — Realtime Security (F-10),"Add Socket.IO handshake Origin enforcement and enforce mesh-only signaling boundaries on the server",10,,Tanvir,,,Potential gap — Low,"Same-room checks exist; prove cross-room, unauthenticated and LiveKit-room relay rejection"
+59,Phase 6 — Optional Profile Hardening (F-11),"Review Egress and observability profiles; remove SYS_ADMIN, Docker socket and host mounts where possible before activation",8,,Tanvir,,,Conditional gap — Medium,"Profiles are optional and not default-active; record an explicit enablement review"
+60,Phase 6 — Secret Handling (F-12),"Move runtime credentials out of environment/healthcheck command metadata and audit Docker/build/runtime secret exposure",8,,Tanvir,,,Confirmed hardening gap — Low,"Keep .env, generated LiveKit YAML and TLS keys outside Git and image build contexts"
+61,Phase 6 — Booking Privacy (F-13),"Define booking-link sharing boundary, minimize public meeting responses and add scoped/expiring access where required",6,,Tanvir,,,Needs product decision — Low,"Current public lookup is link-holder accessible; no exploit is confirmed until privacy requirement is defined"
+62,Phase 6 — LiveKit Authorization,"Remove roomAdmin from browser participant tokens; keep moderation operations behind TSMeet server authorization and audit checks",10,,Tanvir,,,Confirmed design risk — High,"Self-hosted LiveKit admin grants are powerful; preserve host/co-host backend policy"
+63,Phase 6 — Build Supply Chain,"Exclude nested server/.env and generated production files from Docker build contexts; verify built images contain no secrets",6,,Tanvir,,,Confirmed configuration risk — High,"Review .dockerignore, Dockerfiles and image layers; rotate any credential ever included in an image"
+64,Phase 6 — Observability Security,"Restrict /metrics to private/admin access and replace raw unmatched URL labels with bounded route labels",6,,Tanvir,,,Confirmed exposure risk — Low,"Verify Nginx/API-domain exposure and Prometheus scraping after the change"
+65,Phase 6 — Media Session Lifecycle,"Revalidate Socket.IO session expiry and document self-hosted LiveKit token/kick/demotion limits",8,,Tanvir,,,Confirmed lifecycle gap — Medium,"Five-minute token TTL mitigates rejoin lifetime but does not provide immediate self-hosted revocation"
+66,Phase 6 — Proxy-Aware Rate Limits,"Configure trusted reverse-proxy handling and verify auth/public rate limits identify clients correctly without trusting arbitrary forwarded headers",6,,Tanvir,,,Confirmed deployment gap — Medium,"Test Nginx-to-backend client identity and avoid one shared proxy-IP bucket"
+67,Phase 6 — Webhook Reliability,"Make LiveKit webhook processing idempotent and safe for duplicate/out-of-order events; add replay and signature tests",6,,Tanvir,,,Hardening task — Medium,"Signature verification exists; duplicate-event write behaviour still needs a tested contract"
+68,Phase 6 — Image Vulnerability Triage,"Reproduce current image scans by digest; verify certifi and Go helper reachability, update vendor images where applicable and record narrow exceptions",12,,Tanvir,,,Needs evidence — Medium,"F-17/F-18 are scanner findings with reachability unverified; do not claim a Critical TSMeet exploit without runtime proof"
+69,Phase 6 — Security Verification,"Run two-account authorization tests, guest/admission matrix, Socket.IO boundary tests, proxy/API checks, dependency audit and post-remediation container scans",16,,Romeo,,,Not Started,"Record sanitized commands, commit/build, deployment, retest and rollback evidence; no public exposure claim from scanner output alone"
+,,,850,,,,,,"Rows 1–49 unchanged. Added rows 50–69: security remediation and verification backlog. Existing 1–49 estimate 692 h + security backlog 158 h = 850 h; estimates are planning ranges converted to focused task budgets."

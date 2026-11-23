@@ -20,6 +20,8 @@ export type BookingField = {
 
 export type CalendarSettings = {
   calendarType: 'personal' | 'event' | 'round_robin';
+  recurringBookingsEnabled: boolean;
+  maxRecurringBookings: number;
   eventCapacity: number;
   autoRecordMeeting: boolean;
   roundRobinMembers: Array<{
@@ -107,6 +109,8 @@ export type CalendarFormState = {
   shareEnabled: boolean;
   allowCancellation: boolean;
   allowRescheduling: boolean;
+  recurringBookingsEnabled: boolean;
+  maxRecurringBookings: string;
 };
 
 export const weekdays: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -133,6 +137,8 @@ export const initialCalendarForm: CalendarFormState = {
   shareEnabled: true,
   allowCancellation: true,
   allowRescheduling: false,
+  recurringBookingsEnabled: false,
+  maxRecurringBookings: '12',
 };
 
 export function defaultAvailability() {
@@ -235,6 +241,8 @@ export function createCalendarPayload(
       shareEnabled: form.shareEnabled,
       allowCancellation: form.allowCancellation,
       allowRescheduling: form.allowRescheduling,
+      recurringBookingsEnabled: form.recurringBookingsEnabled,
+      maxRecurringBookings: Number(form.maxRecurringBookings),
       customFields: fields.map((field) => ({ ...field })),
     },
     bookingForm: {
@@ -280,6 +288,8 @@ export function hydrateCalendarForm(calendar: CalendarDetail) {
       shareEnabled: Boolean(calendar.settings?.shareEnabled),
       allowCancellation: Boolean(calendar.settings?.allowCancellation),
       allowRescheduling: Boolean(calendar.settings?.allowRescheduling),
+      recurringBookingsEnabled: Boolean(calendar.settings?.recurringBookingsEnabled),
+      maxRecurringBookings: String(calendar.settings?.maxRecurringBookings ?? 12),
     } satisfies CalendarFormState,
     availability: calendar.settings?.availability || defaultAvailability(),
     fields: (calendar.bookingForm?.fields || []).map((field, index) => ({
@@ -493,6 +503,7 @@ export function CalendarForm({
             ['shareEnabled', 'Share enabled'],
             ['allowCancellation', 'Allow cancellation'],
             ['allowRescheduling', 'Allow rescheduling'],
+            ['recurringBookingsEnabled', 'Allow recurring bookings'],
           ].map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
               <input
@@ -505,6 +516,20 @@ export function CalendarForm({
           ))}
         </div>
       </div>
+
+      {form.recurringBookingsEnabled ? (
+        <div className="max-w-xs space-y-2">
+          <label className="text-sm font-medium text-foreground">Maximum meetings per recurring series</label>
+          <Input
+            type="number"
+            min="2"
+            max="12"
+            value={form.maxRecurringBookings}
+            onChange={(event) => setForm((current) => ({ ...current, maxRecurringBookings: event.target.value }))}
+          />
+          <p className="text-xs text-foreground/55">Bookers can choose a daily or weekly series up to this limit.</p>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="border-primary/10 bg-background/50 p-4">

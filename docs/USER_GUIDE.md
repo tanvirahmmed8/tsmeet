@@ -325,6 +325,7 @@ Calendars let other people book time with you, without an account.
 | Booking form | Extra questions to ask the person booking |
 | Confirmation message | What they see after booking |
 | Auto-record prompt | Whether the meeting room offers to record on entry |
+| Recurring bookings | Whether bookers can reserve a bounded daily or weekly series |
 
 **Calendar types**
 
@@ -337,8 +338,11 @@ Calendars let other people book time with you, without an account.
 Round-robin members can each have their own weekly availability, so a slot is
 only offered when at least one member is actually free.
 
-**Sharing.** Every calendar has a public page and an embeddable version for your
-own website. When someone books, they get a confirmation and a meeting link.
+**Sharing.** Every calendar has a stable public page and an embeddable version
+for your own website. A personal calendar's public URL is its reusable personal
+meeting link. When someone books, they get a confirmation and a meeting link.
+If recurring bookings are enabled, the booker can choose daily or weekly and
+receive a separate meeting link for each occurrence.
 
 **Managing bookings.** **Calendars → Manage → Bookings** lists what has been
 booked, filterable by date and status, and lets you cancel with a reason.

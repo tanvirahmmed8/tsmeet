@@ -96,6 +96,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Holidays | Available | Full-day or partial blocks |
 | Disabled slots | Available | One-off blocked ranges with a reason |
 | Personal calendars | Available | One booking per slot |
+| Personal meeting link | Available | Stable share URL for a reusable personal booking page |
 | Event calendars | Available | Capacity per slot |
 | Round-robin calendars | Available | Assignment across team members |
 | Per-member availability in round robin | Available | Slot offered only if a member is free |
@@ -107,6 +108,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Booking cancellation | Available | Calendar owner |
 | Overbooking protection | Available | Per-calendar advisory lock in MySQL |
 | Meeting link per booking | Available | `/meetings/<bookingId>` |
+| Recurring bookings | Available | Daily or weekly series, bounded by the calendar owner (2–12 occurrences) |
 
 ---
 

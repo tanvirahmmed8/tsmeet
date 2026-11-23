@@ -26,6 +26,8 @@ type PublicCalendar = {
     notificationPreferences: { creatorEmailEnabled: boolean; bookerEmailEnabled: boolean };
     embedEnabled: boolean;
     shareEnabled: boolean;
+    recurringBookingsEnabled: boolean;
+    maxRecurringBookings: number;
   };
   bookingForm: { fields: Array<{ id: string; label: string; type: string; required: boolean }> };
   shareUrl: string;
@@ -78,6 +80,8 @@ export function PublicCalendarBooking({ slug, embed = false }: Props) {
   const [bookerEmail, setBookerEmail] = useState('');
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [confirmation, setConfirmation] = useState<any>(null);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<'none' | 'daily' | 'weekly'>('none');
+  const [recurrenceCount, setRecurrenceCount] = useState('2');
 
   useEffect(() => {
     loadCalendar();
@@ -148,6 +152,9 @@ export function PublicCalendarBooking({ slug, embed = false }: Props) {
           bookerEmail,
           responses,
           confirmationMessage: calendar.confirmationMessage,
+          ...(recurrenceFrequency !== 'none'
+            ? { recurrence: { frequency: recurrenceFrequency, interval: 1, count: Number(recurrenceCount) } }
+            : {}),
         }),
       });
 
@@ -241,6 +248,18 @@ export function PublicCalendarBooking({ slug, embed = false }: Props) {
                     <Badge key={String(reminder.minutesBefore)} variant="outline">
                       {reminder.minutesBefore} min before
                     </Badge>
+                  ))}
+                </div>
+              </Card>
+            )}
+            {confirmation.bookings?.length > 1 && (
+              <Card className="p-4 border-border bg-background/60">
+                <p className="text-xs uppercase tracking-wide text-foreground/50 mb-2">Recurring meetings</p>
+                <div className="space-y-2">
+                  {confirmation.bookings.map((booking: any, index: number) => (
+                    <a key={booking.id || index} href={booking.meeting_url || booking.meetingUrl} target="_blank" rel="noreferrer" className="block text-sm text-primary hover:underline">
+                      Meeting {index + 1}: {parseDateLabel(booking.slot_start_at || booking.slotStartAt)}
+                    </a>
                   ))}
                 </div>
               </Card>
@@ -348,6 +367,36 @@ export function PublicCalendarBooking({ slug, embed = false }: Props) {
                       <Input type="email" value={bookerEmail} onChange={(event) => setBookerEmail(event.target.value)} />
                     </div>
                   </div>
+
+                  {calendar.settings.recurringBookingsEnabled ? (
+                    <div className="grid sm:grid-cols-2 gap-4 rounded-xl border border-border bg-primary/5 p-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">Repeat booking</label>
+                        <select
+                          value={recurrenceFrequency}
+                          onChange={(event) => setRecurrenceFrequency(event.target.value as typeof recurrenceFrequency)}
+                          className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                        >
+                          <option value="none">One meeting</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="daily">Daily</option>
+                        </select>
+                      </div>
+                      {recurrenceFrequency !== 'none' ? (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">Number of meetings</label>
+                          <Input
+                            type="number"
+                            min="2"
+                            max={calendar.settings.maxRecurringBookings}
+                            value={recurrenceCount}
+                            onChange={(event) => setRecurrenceCount(event.target.value)}
+                          />
+                          <p className="text-xs text-foreground/55">Up to {calendar.settings.maxRecurringBookings} meetings.</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="space-y-3">
                     {(calendar.bookingForm.fields || []).map((field, index) => {

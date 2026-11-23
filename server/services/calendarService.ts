@@ -7,6 +7,8 @@ export type CalendarType = 'personal' | 'event' | 'round_robin';
 
 export type CalendarSettings = {
   calendarType?: CalendarType;
+  recurringBookingsEnabled?: boolean;
+  maxRecurringBookings?: number;
   eventCapacity?: number;
   autoRecordMeeting?: boolean;
   roundRobinMembers?: Array<{
@@ -81,6 +83,15 @@ export type BookingRecord = {
   cancel_reason?: string | null;
   created_at?: string;
   updated_at?: string;
+  series_id?: string | null;
+  series_index?: number | null;
+  recurrence?: { frequency: 'daily' | 'weekly'; interval: number; count: number } | string | null;
+};
+
+export type RecurrenceSpec = {
+  frequency: 'daily' | 'weekly';
+  interval: number;
+  count: number;
 };
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -153,6 +164,8 @@ export function normalizeCalendarSettings(settings: CalendarSettings | string | 
   const roundRobinMembers = normalizeRoundRobinMembers(parsed.roundRobinMembers);
   return {
     calendarType,
+    recurringBookingsEnabled: parsed.recurringBookingsEnabled ?? false,
+    maxRecurringBookings: Math.min(12, Math.max(2, Number(parsed.maxRecurringBookings || 12))),
     eventCapacity,
     autoRecordMeeting: parsed.autoRecordMeeting ?? false,
     roundRobinMembers,
@@ -175,6 +188,43 @@ export function normalizeCalendarSettings(settings: CalendarSettings | string | 
     allowRescheduling: parsed.allowRescheduling ?? false,
     customFields: Array.isArray(parsed.customFields) ? parsed.customFields : [],
   };
+}
+
+export function normalizeRecurrence(value: any, maxCount = 12): RecurrenceSpec | null {
+  if (!value || typeof value !== 'object') return null;
+  const frequency = value.frequency === 'daily' || value.frequency === 'weekly' ? value.frequency : null;
+  const interval = Math.min(4, Math.max(1, Math.floor(Number(value.interval || 1))));
+  const rawCount = Number(value.count);
+  if (!frequency || !Number.isFinite(rawCount) || rawCount < 2) return null;
+  const count = Math.min(Math.floor(rawCount), Math.min(12, Math.max(2, maxCount)));
+  return { frequency, interval, count };
+}
+
+/**
+ * Expand a local calendar slot into a bounded recurring series. Dates are
+ * advanced in the calendar timezone, then converted back to UTC so DST does
+ * not shift the advertised local meeting time.
+ */
+export function buildRecurringSlotStarts(
+  slotStartAt: string,
+  recurrence: RecurrenceSpec | null,
+  timeZone: string
+) {
+  const first = new Date(slotStartAt);
+  if (Number.isNaN(first.getTime())) return [] as Date[];
+  if (!recurrence) return [first];
+
+  const firstParts = getDatePartsInTimeZone(first, timeZone);
+  const firstDate = new Date(Date.UTC(firstParts.year, firstParts.month - 1, firstParts.day));
+  const localTime = `${String(firstParts.hour).padStart(2, '0')}:${String(firstParts.minute).padStart(2, '0')}`;
+  const starts: Date[] = [];
+  for (let index = 0; index < recurrence.count; index += 1) {
+    const days = index * recurrence.interval * (recurrence.frequency === 'weekly' ? 7 : 1);
+    const localDate = new Date(firstDate.getTime() + days * 24 * 60 * 60 * 1000);
+    const dateString = `${localDate.getUTCFullYear()}-${String(localDate.getUTCMonth() + 1).padStart(2, '0')}-${String(localDate.getUTCDate()).padStart(2, '0')}`;
+    starts.push(buildUtcDateFromTimezoneDateTime(dateString, localTime, timeZone));
+  }
+  return starts;
 }
 
 export function getSlotCapacity(settings: CalendarSettings) {
@@ -526,6 +576,7 @@ export function toApiCalendar(row: CalendarRecord) {
     settings,
     bookingForm,
     shareUrl: buildPublicCalendarUrl(row.slug),
+    personalMeetingUrl: settings.calendarType === 'personal' ? buildPublicCalendarUrl(row.slug) : null,
     embedUrl: buildEmbedUrl(row.slug),
     embedCode: buildEmbedCode(row.slug),
     createdAt: row.created_at,

@@ -496,6 +496,8 @@ On booking, one available member is assigned and stored on the booking as
   "confirmationMessage": "Thanks {{bookerName}}, your booking is confirmed.",
   "settings": {
     "calendarType": "round_robin",
+    "recurringBookingsEnabled": true,
+    "maxRecurringBookings": 12,
     "eventCapacity": 1,
     "autoRecordMeeting": true,
     "roundRobinMembers": [{ "email": "alex@example.com" }],
@@ -522,6 +524,11 @@ On booking, one available member is assigned and stored on the booking as
 `settings.autoRecordMeeting: true` makes the room prompt the host to start
 recording on entry. It does **not** start recording automatically — the host still
 confirms consent.
+
+For a personal calendar, `shareUrl` is the stable personal meeting link. Keep it
+private if the calendar is intended for invited people only. When
+`recurringBookingsEnabled` is true, public bookers may request a bounded daily or
+weekly series.
 
 ### `GET /api/calendars`
 
@@ -572,7 +579,8 @@ Update metadata, `settings`, or `bookingForm`.
   "slotStartAt": "2026-06-03T04:00:00.000Z",
   "bookerName": "Alice",
   "bookerEmail": "alice@example.com",
-  "responses": { "company": "Acme" }
+  "responses": { "company": "Acme" },
+  "recurrence": { "frequency": "weekly", "interval": 1, "count": 4 }
 }
 ```
 
@@ -589,6 +597,8 @@ Update metadata, `settings`, or `bookingForm`.
     "status": "confirmed"
   },
   "meetingUrl": "http://localhost:3001/meetings/<bookingId>",
+  "seriesId": "<uuid-or-null>",
+  "meetingUrls": ["http://localhost:3001/meetings/<bookingId>"],
   "confirmationMessage": "Thanks Alice, your booking is confirmed.",
   "reminders": [{ "minutesBefore": 10, "remindAt": "2026-06-03T03:50:00.000Z" }]
 }
@@ -624,7 +634,12 @@ requests per minute.
 | `POST /api/public/calendars/:slug/bookings` | Public booking creation |
 | `GET /api/public/calendars/meetings/:bookingId` | Look up a booking's meeting |
 
-The booking body matches the authenticated version. The meeting lookup returns:
+The booking body uses the same base fields as the authenticated booking route. `recurrence` is optional and
+is accepted only when the calendar enables it. `frequency` is `daily` or
+`weekly`; `interval` is 1–4; `count` is 2–12 and is capped by the calendar's
+`maxRecurringBookings`. The server validates every occurrence before creating
+the series. Each occurrence receives its own meeting URL and shares a `seriesId`.
+The meeting lookup returns:
 
 ```json
 {
