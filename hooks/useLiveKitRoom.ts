@@ -94,6 +94,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const previewVideoRef = useRef<LocalVideoTrack | null>(null);
   const microphoneBusyRef = useRef(false);
   const cameraBusyRef = useRef(false);
+  const screenShareBusyRef = useRef(false);
   const microphoneWantedRef = useRef(false);
   const cameraWantedRef = useRef(false);
   const hostMutedRef = useRef(false);
@@ -105,12 +106,14 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const uplinkAdaptationRef = useRef<NetworkAdaptationState>({ tier: 'excellent', candidateTier: null, candidateSamples: 0, healthySamples: 0 });
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const [livekitRoom, setLivekitRoom] = useState<Room | undefined>(undefined);
   const [peers, setPeers] = useState<PeerView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMicOn, setIsMicOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isScreenShareBusy, setIsScreenShareBusy] = useState(false);
   const [joinStatus, setJoinStatus] = useState<JoinStatus>('idle');
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
   const [isHost, setIsHost] = useState(false);
@@ -136,12 +139,14 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       const tracks = [previewAudioRef.current, previewVideoRef.current]
         .filter((track) => track && !track.isMuted).map((track) => track!.mediaStreamTrack);
       setLocalStream(new MediaStream(tracks));
+      setLocalScreenStream(null);
       return;
     }
     const microphone = local.getTrackPublication(Track.Source.Microphone)?.track;
     setIsMicOn(Boolean(local.isMicrophoneEnabled && microphone?.mediaStreamTrack.readyState === 'live'));
     setIsCameraOn(local.isCameraEnabled);
     setLocalStream(mediaStreamForParticipant(local) || new MediaStream());
+    setLocalScreenStream(mediaStreamForParticipant(local, true) || null);
   }, []);
 
   const syncRemoteParticipants = useCallback(() => {
@@ -279,8 +284,20 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     room.on(RoomEvent.ParticipantDisconnected, syncRemoteParticipants);
     room.on(RoomEvent.TrackPublished, applySubscriptionPolicy);
     room.on(RoomEvent.ParticipantConnected, applySubscriptionPolicy);
-    room.on(RoomEvent.LocalTrackPublished, () => syncLocalStream(room.localParticipant));
-    room.on(RoomEvent.LocalTrackUnpublished, () => syncLocalStream(room.localParticipant));
+    room.on(RoomEvent.LocalTrackPublished, (publication) => {
+      if (publication.source === Track.Source.ScreenShare) {
+        setIsScreenSharing(true);
+        publication.track?.mediaStreamTrack.addEventListener('ended', () => {
+          setIsScreenSharing(false);
+          syncLocalStream(room.localParticipant);
+        }, { once: true });
+      }
+      syncLocalStream(room.localParticipant);
+    });
+    room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+      if (publication.source === Track.Source.ScreenShare) setIsScreenSharing(false);
+      syncLocalStream(room.localParticipant);
+    });
     room.on(RoomEvent.Reconnecting, () => setError('Reconnecting media…'));
     room.on(RoomEvent.Reconnected, () => setError(null));
     room.on(RoomEvent.Disconnected, () => {
@@ -562,6 +579,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     setLivekitRoom(undefined);
     room?.disconnect();
     setLocalStream(null);
+    setLocalScreenStream(null);
     setPeers([]);
     signalingParticipantsRef.current.clear();
     hasSignalingSnapshotRef.current = false;
@@ -759,12 +777,33 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     finally { microphoneBusyRef.current = false; }
   }, [syncLocalStream]);
   const toggleScreenShare = useCallback(async (includeDeviceAudio = false) => {
-    const participant = roomRef.current?.localParticipant; if (!participant) return;
+    const participant = roomRef.current?.localParticipant;
+    if (!participant || screenShareBusyRef.current) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) {
+      setError('Screen sharing is not supported by this browser. Try a recent desktop browser over HTTPS.');
+      return;
+    }
     const enabled = !isScreenSharing;
+    screenShareBusyRef.current = true;
+    setIsScreenShareBusy(true);
     try {
       await participant.setScreenShareEnabled(enabled, { audio: includeDeviceAudio });
       setIsScreenSharing(enabled); syncLocalStream(participant); setError(null);
-    } catch { setError('Screen sharing was cancelled or denied by the browser.'); }
+    } catch (cause) {
+      const name = cause instanceof DOMException ? cause.name : '';
+      if (name === 'NotAllowedError' || name === 'AbortError') {
+        setError(null);
+      } else if (name === 'InvalidStateError') {
+        setError('Keep this meeting tab active, then try sharing again.');
+      } else if (name === 'NotReadableError') {
+        setError('The selected screen cannot be captured. Close other capture tools and try again.');
+      } else {
+        setError('Screen sharing could not start. Check browser permissions and use HTTPS.');
+      }
+    } finally {
+      screenShareBusyRef.current = false;
+      setIsScreenShareBusy(false);
+    }
   }, [isScreenSharing, syncLocalStream]);
   const setBackgroundMode = useCallback((mode: BackgroundMode) => {
     void applyBackground(mode, backgroundImage);
@@ -799,7 +838,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     livekitRoom,
     ...meetingSignals,
     chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage,
-    localStream, peers, error, isCameraOn, isMicOn, isScreenSharing, joinStatus,
+    localStream, localScreenStream, peers, error, isCameraOn, isMicOn, isScreenSharing, isScreenShareBusy, joinStatus,
     pendingRequests, isHost, unmuteRequests, isMutedByHost, unmuteRequested,
     raisedHands, isHandRaised, backgroundMode, backgroundImage, isLowDataMode,
     networkQuality, coHosts, setBackgroundMode, setBackgroundImage, setIsLowDataMode,

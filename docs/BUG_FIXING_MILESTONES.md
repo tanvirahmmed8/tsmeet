@@ -174,10 +174,10 @@ Status: Not started. Estimate: **7–13 h**.
 
 ### M09 — BUG-12: Screen sharing
 
-Status: Not started. Estimate: **7–11 h**.
+Status: Local implementation and automated checks complete (2026-11-24); production and real-browser/device acceptance pending. M09 remains open. Estimate: **7–11 h**.
 
 - [ ] **Step 1 — Verify (2–3 h):** Failureটি start, remote display, sizing, audio না stop—প্রথমে isolate। Target browser capability local-এ verify; server check শুধু track delivery failure হলে। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (3–5 h):** Supported flow-এর confirmed bug fix; screen-share track shared LiveKit focus rendering-এ দেখানো, content-fit/contain sizing ও camera filmstrip responsive রাখা। Capture permission/audio support SDK component দিয়ে বাড়বে না—unsupported capability-তে পরিষ্কার feedback। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (3–5 h):** Local presenter preview এখন screen-share track ব্যবহার করে; LiveKit local track ended/unpublished হলে sharing state reset হয়; Zoom-style no-audio/system-audio share choices, busy protection, capability checks এবং actionable browser errors যোগ হয়েছে। Screen-stage overlay সরিয়ে layout controls uncluttered রাখা হয়েছে। `pnpm typecheck` passed এবং targeted lint-এ 0 errors; real browser/device acceptance pending.
 - [ ] **Step 3 — Local commit → server commands → retest (2–3 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Laptop share start/stop ও remote reception কাজ করে; iPhone receiver পরীক্ষা; source browser সমর্থন অনুযায়ী audio যাচাই। Result ও commit reference record হলে step complete।
 
 ### M10 — BUG-05: Gallery / speaker view

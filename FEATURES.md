@@ -26,8 +26,8 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Meeting-shell fullscreen | Implemented; production/device retest pending | Fullscreen includes toolbar and scoped popup portals in gallery/focus views |
 | SDK remote track rendering | Implemented; real-media retest pending | Existing LiveKit Room reused with VideoTrack and one RoomAudioRenderer; local preview remains custom |
 | Hide your own tile | Available | Local only; others still see you |
-| Screen sharing | Available | Tab, window, or entire screen |
-| Screen share with system audio | Available | Browser- and target-dependent |
+| Screen sharing | Implemented; browser/device retest pending | Tab, window, or entire screen with local presenter preview and browser-stop state sync |
+| Screen share with system audio | Implemented; browser-dependent | Optional system-audio capture with explicit no-audio fallback |
 | Adaptive video quality | Available | Reacts to measured network conditions |
 | Low-data mode | Available | For constrained connections |
 | In-meeting chat | Implemented; production/device retest pending | Room-scoped Socket.IO server echo with admitted sender identity, acknowledgement/error feedback and bounded live history; no offline replay or persistent history |

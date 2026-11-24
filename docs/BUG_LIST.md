@@ -84,6 +84,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
   - Verify: delivery, sender name, ordering এবং reconnect-এর পর নতুন message আদান-প্রদান পরীক্ষা।
 
 - [ ] **BUG-12 — Screen sharing সঠিকভাবে কাজ করে না**
+  - Local progress (2026-11-24): LiveKit presenter preview now switches to the local screen track; browser Stop Sharing synchronizes UI state; Share uses separate no-audio/system-audio choices with capability and actionable error handling. Production and real-browser/device acceptance remain pending.
   - Report: screen share is not perfect; নির্দিষ্ট failure detail দেওয়া হয়নি।
   - Expected: browser সমর্থন করলে share শুরু/বন্ধ হবে এবং অন্য participant content দেখতে পাবেন; unsupported হলে পরিষ্কার feedback থাকবে।
   - Verify: failureটি start, display sizing, audio, remote delivery না stop-এর সময় হচ্ছে তা আলাদা করা।

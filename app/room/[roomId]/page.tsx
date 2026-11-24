@@ -185,11 +185,13 @@ export default function RoomPage() {
     signalingInterrupted, recordingNotice, rosterReady,
     chatMessages, unreadChatCount, setChatReadState, chatError, sendMessage: sendChatMessage,
     localStream,
+    localScreenStream,
     peers,
     error: webrtcError,
     isCameraOn,
     isMicOn,
     isScreenSharing,
+    isScreenShareBusy,
     joinStatus,
     pendingRequests,
     isHost,
@@ -270,10 +272,10 @@ export default function RoomPage() {
   }, [roomId]);
 
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = (isScreenSharing && localScreenStream ? localScreenStream : localStream) || null;
     }
-  }, [localStream]);
+  }, [isScreenSharing, localScreenStream, localStream]);
 
   useEffect(() => {
     if (localThumbRef.current && localStream) {
@@ -1540,11 +1542,6 @@ export default function RoomPage() {
                     {stageLabel}
                   </div>
                 ) : null}
-                {stageSelection === 'local' && isScreenSharing ? (
-                  <div className="rounded-full border border-emerald-400/20 bg-emerald-500/15 px-3 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur-md">
-                    Screen sharing
-                  </div>
-                ) : null}
               </div>
 
               <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -2114,8 +2111,9 @@ export default function RoomPage() {
           <div className="flex shrink-0 items-center gap-1 border-l border-white/10 pl-2">
             {isScreenSharing ? (
               <Button
-                onClick={() => toggleScreenShare(false)}
+                onClick={() => void toggleScreenShare(false)}
                 size="lg"
+                disabled={isScreenShareBusy}
                 className="h-11 rounded-full bg-primary px-4 text-white hover:bg-primary/90"
                 title="Stop presenting"
               >
@@ -2123,16 +2121,38 @@ export default function RoomPage() {
                 <span className="hidden sm:inline">Stop sharing</span>
               </Button>
             ) : (
-              <Button
-                onClick={() => toggleScreenShare(true)}
-                size="lg"
-                variant="outline"
-                className="h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white"
-                title="Share screen or window"
-              >
-                <Share2 className="h-5 w-5" />
-                <span className="ml-2 hidden sm:inline">Share</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    disabled={isScreenShareBusy}
+                    className="h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white"
+                    title="Share screen or window"
+                  >
+                    <Share2 className="h-5 w-5" />
+                    <span className="ml-2 hidden sm:inline">Share</span>
+                    <ChevronDown className="ml-1 h-4 w-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" sideOffset={10} className="w-72">
+                  <DropdownMenuLabel>Choose what to share</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => void toggleScreenShare(false)} className="items-start gap-3 py-3">
+                    <Share2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span className="flex flex-col gap-0.5">
+                      <span>Screen or window</span>
+                      <span className="text-xs text-muted-foreground">Share without computer audio</span>
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void toggleScreenShare(true)} className="items-start gap-3 py-3">
+                    <Volume2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span className="flex flex-col gap-0.5">
+                      <span>Screen with system audio</span>
+                      <span className="text-xs text-muted-foreground">Audio depends on browser and source</span>
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             <Button
