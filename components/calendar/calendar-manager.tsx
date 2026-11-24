@@ -2,6 +2,7 @@
 
 import { getSessionUser } from '@/lib/browserSession';
 import { BrandLogo } from '@/components/brand-logo';
+import { APP_NAME } from '@/lib/appConfig';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -491,7 +492,7 @@ export function CalendarManager() {
           <div className="flex items-center gap-3">
             <BrandLogo iconSize={40} iconOnly />
             <div>
-              <h1 className="font-bold text-lg text-foreground dark:text-accent">TSMeet Calendars</h1>
+              <h1 className="font-bold text-lg text-foreground dark:text-accent">{APP_NAME} Calendars</h1>
               <p className="text-xs text-foreground/50">API-first scheduling</p>
             </div>
           </div>

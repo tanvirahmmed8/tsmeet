@@ -181,6 +181,7 @@ services:
       args:
         NEXT_PUBLIC_SIGNALING_SERVER: ${NEXT_PUBLIC_SIGNALING_SERVER:-http://localhost:3002}
         NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TSMeet}
     environment:
       NODE_ENV: production
       # This is a server-side URL used from inside the frontend container.
@@ -188,6 +189,7 @@ services:
       BACKEND_URL: http://backend:3002
       NEXT_PUBLIC_SIGNALING_SERVER: ${NEXT_PUBLIC_SIGNALING_SERVER:-http://localhost:3002}
       NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TSMeet}
     depends_on:
       - backend
     ports:

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { UserSidebar, UserSidebarHeader } from '@/components/dashboard/user-sidebar';
+import { APP_NAME } from '@/lib/appConfig';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUpRight,
@@ -506,7 +507,7 @@ export default function DashboardPage() {
           {/* Footer */}
           <footer className="mt-16 pb-8 border-t border-border/10 pt-8 flex flex-col items-center gap-2">
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
-              © 2026 TSMeet. Private collaboration software for modern teams.
+              © 2026 {APP_NAME}. Private collaboration software for modern teams.
             </p>
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
               Developed by <a href="https://tanvirsoft.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Tanvir Ahmmed</a>

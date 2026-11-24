@@ -12,6 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { AccountEntryGuard } from '@/components/auth/account-entry-guard';
 import { cacheSessionUser } from '@/lib/browserSession';
+import { APP_NAME } from '@/lib/appConfig';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -78,7 +79,7 @@ export default function RegisterPage() {
 
         <h2 className="text-2xl font-bold text-foreground mb-2 text-center">Create account</h2>
           <p className="text-foreground/60 dark:text-foreground/70 text-center mb-6">
-            Create your TSMeet workspace account
+            Create your {APP_NAME} workspace account
           </p>
 
         {error && (

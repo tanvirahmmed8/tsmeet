@@ -10,6 +10,7 @@ import {
 } from '@livekit/components-react';
 import { RoomEvent, Track } from 'livekit-client';
 import { useSearchParams } from 'next/navigation';
+import { APP_NAME } from '@/lib/appConfig';
 import { Suspense, useEffect } from 'react';
 
 function RecordingGrid() {
@@ -43,7 +44,7 @@ function RecordingGrid() {
     <main className="flex h-screen flex-col bg-slate-950 p-8 text-white">
       <header className="mb-5 flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">TSMeet</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">{APP_NAME}</p>
           <h1 className="text-xl font-semibold">Meeting recording</h1>
         </div>
         <div className="rounded-full bg-red-500/15 px-4 py-2 text-sm text-red-200">● Recording</div>

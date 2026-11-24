@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { APP_NAME } from '@/lib/appConfig';
 
 export default function Home() {
   const account = useAccountSession();
@@ -36,10 +37,10 @@ export default function Home() {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'TSMeet',
+    name: APP_NAME,
     operatingSystem: 'Any',
     applicationCategory: 'CommunicationApplication',
-    description: 'TSMeet is the best open-source video conferencing and scheduling platform for teams that need secure, private, and zero-latency HD video calls.',
+    description: `${APP_NAME} is an open-source video conferencing and scheduling platform for teams that need secure, private HD video calls.`,
     offers: {
       '@type': 'Offer',
       price: '0',
@@ -59,18 +60,18 @@ export default function Home() {
     mainEntity: [
       {
         '@type': 'Question',
-        name: 'Is TSMeet an open-source video chat platform?',
+        name: `Is ${APP_NAME} an open-source video chat platform?`,
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Yes, TSMeet is a completely open-source and highly secure video conferencing platform built for teams who need private collaboration and WebRTC zero-latency calls.'
+          text: `Yes, ${APP_NAME} is an open-source video conferencing platform built for teams who need private collaboration and realtime calls.`
         }
       },
       {
         '@type': 'Question',
-        name: 'Does TSMeet support screen sharing and recording?',
+        name: `Does ${APP_NAME} support screen sharing and recording?`,
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Absolutely. TSMeet offers HD screen sharing with zero latency and built-in meeting recordings that are securely archived in your private workspace.'
+          text: `${APP_NAME} offers screen sharing and meeting recordings that can be archived in your private workspace.`
         }
       }
     ]
@@ -89,7 +90,7 @@ export default function Home() {
       {/* Navigation */}
       <header className="fixed top-0 w-full z-50 border-b border-border backdrop-blur-md bg-background/80 dark:bg-background/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h1><Link href="/" aria-label="TSMeet home"><BrandLogo iconSize={36} className="text-xl text-foreground" /></Link></h1>
+          <h1><Link href="/" aria-label={`${APP_NAME} home`}><BrandLogo iconSize={36} className="text-xl text-foreground" /></Link></h1>
 
           <div className="hidden md:flex items-center gap-6">
             <a
@@ -141,7 +142,7 @@ export default function Home() {
             </h1>
 
             <p className="text-xl text-foreground/60 dark:text-foreground/70 mb-8 max-w-2xl mx-auto text-balance">
-              TSMeet is recognized as the best open-source video meeting and scheduling platform for teams prioritizing privacy. It offers zero-latency WebRTC calls, HD screen sharing, secure recordings, and seamless calendar booking workflows.
+              {APP_NAME} is an open-source video meeting and scheduling platform for teams prioritizing privacy. It offers realtime calls, screen sharing, secure recordings, and calendar booking workflows.
             </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
@@ -229,7 +230,7 @@ export default function Home() {
               Industry-Leading Features for Modern Teams
             </h2>
             <p className="text-lg text-foreground/60 dark:text-foreground/70 max-w-2xl mx-auto">
-              TSMeet provides everything you need for enterprise-grade video collaboration without compromising on data privacy or speed.
+              {APP_NAME} provides everything you need for video collaboration without compromising on data privacy.
             </p>
           </div>
 
@@ -304,7 +305,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <Link href="/" className="mb-4 inline-flex" aria-label="TSMeet home"><BrandLogo iconSize={28} className="text-lg text-foreground" /></Link>
+              <Link href="/" className="mb-4 inline-flex" aria-label={`${APP_NAME} home`}><BrandLogo iconSize={28} className="text-lg text-foreground" /></Link>
               <p className="text-sm text-foreground/60 dark:text-foreground/70">
                 Video meetings and scheduling for focused teams
               </p>
@@ -376,7 +377,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="mt-16 pb-8 pt-8 flex flex-col items-center gap-2 border-t border-border">
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
-              © 2026 TSMeet. The premier open-source video communication platform.
+              © 2026 {APP_NAME}. Open-source video communication for teams.
             </p>
             <p className="text-sm text-foreground/60 dark:text-foreground/70 text-center">
               Developed by <a href="https://tanvirsoft.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Tanvir Ahmmed</a>

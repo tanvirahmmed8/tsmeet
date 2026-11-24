@@ -14,6 +14,7 @@ import { toggleMeetingFullscreen } from '@/lib/meetingFullscreen';
 import { useMeetingSounds } from '@/hooks/useMeetingSounds';
 import { SOUND_LABELS, type MeetingSound } from '@/lib/meetingSounds';
 import { Input } from '@/components/ui/input';
+import { APP_NAME } from '@/lib/appConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -1030,7 +1031,7 @@ export default function RoomPage() {
       <header className="hidden">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold tracking-tight">TSMeet Room</h1>
+            <h1 className="text-lg font-semibold tracking-tight">{APP_NAME} Room</h1>
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/55">
               {roomLabel}
             </span>

@@ -70,6 +70,8 @@ create `server/.env` with at least:
 NODE_ENV=development
 PORT=3002
 FRONTEND_URL=http://localhost:3001
+# Public product name; this is bundled into the frontend at build time.
+NEXT_PUBLIC_APP_NAME=TSMeet
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=root

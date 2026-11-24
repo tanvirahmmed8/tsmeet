@@ -154,6 +154,8 @@ Edit `/opt/tsmeet/.env` and set every `change-me` value. These are the productio
 ```dotenv
 FRONTEND_URL=https://meet.example.com
 MEETING_BASE_URL=https://meet.example.com
+# Public product name; set before rebuilding the frontend image.
+NEXT_PUBLIC_APP_NAME=PiaMeet
 BACKEND_URL=http://backend:3002
 NEXT_PUBLIC_SIGNALING_SERVER=https://meet.example.com
 NEXT_PUBLIC_LIVEKIT_URL=wss://api.example.com/livekit

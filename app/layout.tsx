@@ -1,16 +1,17 @@
 import React from "react"
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { APP_NAME, APP_TAGLINE } from '@/lib/appConfig'
 
 export const metadata: Metadata = {
-  applicationName: 'TSMeet',
-  manifest: '/site.webmanifest',
-  appleWebApp: { capable: true, title: 'TSMeet', statusBarStyle: 'default' },
+  applicationName: APP_NAME,
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: APP_NAME, statusBarStyle: 'default' },
   title: {
-    default: 'TSMeet - Secure Open-Source Video Meetings',
-    template: '%s | TSMeet'
+    default: `${APP_NAME} - ${APP_TAGLINE}`,
+    template: `%s | ${APP_NAME}`
   },
-  description: 'TSMeet is the best open-source video conferencing platform for private, zero-latency group calls, screen sharing, recording, and calendar scheduling.',
+  description: `${APP_NAME} is an open-source video conferencing platform for private group calls, screen sharing, recording, and calendar scheduling.`,
   keywords: ['video chat', 'open-source video meetings', 'secure group calls', 'screen sharing', 'webRTC', 'calendar scheduling'],
   authors: [{ name: 'Tanvir Ahmmed', url: 'https://tanvirsoft.com/' }],
   creator: 'Tanvir Ahmmed',
@@ -20,20 +21,20 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: 'https://tsmeet.tanvirsoft.com',
-    title: 'TSMeet - Secure Open-Source Video Meetings',
-    description: 'TSMeet is the best open-source video conferencing platform for private, zero-latency group calls, screen sharing, recording, and calendar scheduling.',
-    siteName: 'TSMeet',
+    title: `${APP_NAME} - ${APP_TAGLINE}`,
+    description: `${APP_NAME} is an open-source video conferencing platform for private group calls, screen sharing, recording, and calendar scheduling.`,
+    siteName: APP_NAME,
     images: [{
       url: '/og-image.png',
       width: 1200,
       height: 630,
-      alt: 'TSMeet — Meet. Share. Connect. Self-hosted video meetings.',
+      alt: `${APP_NAME} — self-hosted video meetings.`,
     }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'TSMeet - Secure Open-Source Video Meetings',
-    description: 'TSMeet is the best open-source video conferencing platform for private, zero-latency group calls.',
+    title: `${APP_NAME} - ${APP_TAGLINE}`,
+    description: `${APP_NAME} is an open-source video conferencing platform for private group calls.`,
     images: ['/og-image.png'],
   },
   icons: {
