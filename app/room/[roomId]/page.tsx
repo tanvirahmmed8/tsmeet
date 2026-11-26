@@ -612,6 +612,21 @@ export default function RoomPage() {
   const pinLocal = () => { setPinnedId('local'); setLayoutMode('spotlight'); };
   const pinPeer = (peerId: string) => { setPinnedId(peerId); setLayoutMode('spotlight'); };
   const unpin = () => { setPinnedId(null); setLayoutMode('gallery'); };
+  const chooseLayout = (mode: 'gallery' | 'spotlight' | 'floating') => {
+    setLayoutMode(mode);
+    if (mode === 'gallery') {
+      setPinnedId(null);
+      return;
+    }
+
+    if (pinnedId) return;
+    const target = activeSpeakerId && (activeSpeakerId === 'local' || peers.some((peer) => peer.peerId === activeSpeakerId))
+      ? activeSpeakerId
+      : !hideSelf
+        ? 'local'
+        : peers[0]?.peerId || null;
+    if (target) setPinnedId(target);
+  };
   const startHostPanelDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     hostPanelDraggingRef.current = true;
     hostPanelDragOffsetRef.current = {
@@ -1633,8 +1648,13 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className={`mx-auto w-full max-w-[1600px] ${pinnedId && layoutMode === 'floating' ? 'pointer-events-none absolute bottom-4 right-4 z-20 max-w-[min(62vw,720px)]' : pinnedId ? 'shrink-0' : 'flex min-h-0 flex-1 items-center'}`}>
-            <div className={pinnedId ? `pointer-events-auto flex max-w-full gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/75 p-2 shadow-2xl backdrop-blur-xl ${layoutMode === 'floating' ? 'max-h-[30vh]' : 'w-full pb-2'}` : `grid w-full content-center gap-3 ${participantCount <= 1 ? 'grid-cols-1' : participantCount <= 4 ? 'grid-cols-1 sm:grid-cols-2' : participantCount <= 9 ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
+          {layoutMode !== 'spotlight' ? (
+          <div className={pinnedId && layoutMode === 'floating'
+            ? 'pointer-events-none absolute bottom-4 right-4 z-20 w-[min(62vw,720px)] max-w-[calc(100%-2rem)]'
+            : `mx-auto w-full max-w-[1600px] ${pinnedId ? 'shrink-0' : 'flex min-h-0 flex-1 items-center'}`}>
+            <div className={pinnedId
+              ? `pointer-events-auto flex w-full max-w-full gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/75 p-2 shadow-2xl backdrop-blur-xl ${layoutMode === 'floating' ? 'max-h-[30vh]' : 'pb-2'}`
+              : `grid w-full content-center gap-3 ${participantCount <= 1 ? 'grid-cols-1' : participantCount <= 4 ? 'grid-cols-1 sm:grid-cols-2' : participantCount <= 9 ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
               {!hideSelf && (
                 <Card
                     className={`relative mx-auto aspect-video cursor-pointer overflow-hidden rounded-2xl border bg-[#101820] shadow-none transition ${activeSpeakerId === 'local' ? 'border-emerald-400 ring-2 ring-emerald-400/30' : 'border-white/10'} ${pinnedId ? 'w-52 shrink-0' : participantCount === 1 ? 'w-full max-w-5xl' : 'w-full'}`}
@@ -1725,6 +1745,7 @@ export default function RoomPage() {
               ) : null}
             </div>
           </div>
+          ) : null}
         </div>
 
         {/* Chat Sidebar */}
@@ -2259,14 +2280,25 @@ export default function RoomPage() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Layout</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => { setLayoutMode('gallery'); setPinnedId(null); }}>
-                  Gallery view
+                <DropdownMenuItem className="items-center gap-3 py-2" onSelect={() => chooseLayout('gallery')}>
+                  <span aria-hidden="true" className="grid h-8 w-10 grid-cols-2 gap-0.5 rounded border border-current/30 p-0.5 opacity-80">
+                    <span className="rounded-sm bg-current/45" /><span className="rounded-sm bg-current/25" />
+                    <span className="rounded-sm bg-current/25" /><span className="rounded-sm bg-current/45" />
+                  </span>
+                  <span className="flex flex-col"><span>Gallery view</span><span className="text-[10px] text-muted-foreground">Show everyone in a grid</span></span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setLayoutMode('spotlight')} disabled={!pinnedId}>
-                  Spotlight view
+                <DropdownMenuItem className="items-center gap-3 py-2" onSelect={() => chooseLayout('spotlight')}>
+                  <span aria-hidden="true" className="flex h-8 w-10 items-center justify-center rounded border border-current/30 p-1 opacity-80">
+                    <span className="h-full w-full rounded-sm bg-current/40" />
+                  </span>
+                  <span className="flex flex-col"><span>Spotlight view</span><span className="text-[10px] text-muted-foreground">Focus one participant</span></span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setLayoutMode('floating')} disabled={!pinnedId}>
-                  Floating filmstrip
+                <DropdownMenuItem className="items-center gap-3 py-2" onSelect={() => chooseLayout('floating')}>
+                  <span aria-hidden="true" className="flex h-8 w-10 items-end justify-end gap-0.5 rounded border border-current/30 p-1 opacity-80">
+                    <span className="h-full flex-1 rounded-sm bg-current/25" />
+                    <span className="h-3/5 w-3/5 rounded-sm bg-current/55" />
+                  </span>
+                  <span className="flex flex-col"><span>Floating filmstrip</span><span className="text-[10px] text-muted-foreground">Focus with floating tiles</span></span>
                 </DropdownMenuItem>
                 {isModerator ? (
                   <>

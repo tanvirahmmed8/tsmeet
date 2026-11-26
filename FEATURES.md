@@ -22,7 +22,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 | Input/output device selection | Available | Microphone, camera, and speaker pickers |
 | Gallery layout | Available | Grid of participants |
 | Active-speaker layout | Available | Current speaker on stage |
-| Pinned participant | Available | Pin from the participants panel |
+| Pinned participant | Available | Pinning switches to spotlight automatically; other tiles stay hidden until Gallery or Floating filmstrip is selected |
 | Meeting-shell fullscreen | Implemented; production/device retest pending | Fullscreen includes toolbar and scoped popup portals in gallery/focus views |
 | SDK remote track rendering | Implemented; real-media retest pending | Existing LiveKit Room reused with VideoTrack and one RoomAudioRenderer; local preview remains custom |
 | Hide your own tile | Available | Local only; others still see you |
