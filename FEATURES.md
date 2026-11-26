@@ -18,7 +18,7 @@ Legend: **Available** — shipped and covered by the default stack ·
 |---|---|---|
 | Camera and microphone preview before joining | Available | Choose devices before entering |
 | Consistent TSMeet branding | Implemented | Shared camera/chat/T logo on public/auth/workspace screens; SVG/ICO favicons, Apple touch and maskable launcher assets, web manifest and social-link image. Manifest metadata does not provide offline support |
-| Safari capture preferences | Implemented; device retest pending | Pre-join capture uses explicit buttons; joining preserves mute/camera choices; host approval requires a participant tap to unmute. Lost microphone tracks require a fresh tap; pending unmute is reversed if host mute or leave invalidates it |
+| Safari capture preferences | Implemented; device retest pending | Pre-join capture uses explicit buttons; joining and page reload restore room/user-scoped camera and microphone choices; host approval requires a participant tap to unmute. Lost microphone tracks require a fresh tap; pending unmute is reversed if host mute or leave invalidates it |
 | Input/output device selection | Available | Microphone, camera, and speaker pickers |
 | Gallery layout | Available | Grid of participants |
 | Active-speaker layout | Available | Current speaker on stage |
@@ -27,14 +27,14 @@ Legend: **Available** — shipped and covered by the default stack ·
 | SDK remote track rendering | Implemented; real-media retest pending | Existing LiveKit Room reused with VideoTrack and one RoomAudioRenderer; local preview remains custom |
 | Hide your own tile | Available | Local only; others still see you |
 | Screen sharing | Implemented; browser/device retest pending | Tab, window, or entire screen with local presenter preview and browser-stop state sync |
-| Screen share with system audio | Implemented; browser-dependent | Optional system-audio capture with explicit no-audio fallback |
+| Screen share with system audio | Implemented; browser-dependent | Direct share action delegates audio on/off choice to the browser dialog |
 | Adaptive video quality | Available | Reacts to measured network conditions |
 | Low-data mode | Available | For constrained connections |
 | In-meeting chat | Implemented; production/device retest pending | Room-scoped Socket.IO server echo with admitted sender identity, acknowledgement/error feedback and bounded live history; no offline replay or persistent history |
 | Chat unread indicators and message bubbles | Implemented; browser retest pending | Incoming messages count while chat is closed/backgrounded; focused visible chat clears count; own messages align right, others left; badge displays 99+ above 99 |
 | Hand raising | Available | With host visibility |
 | Meeting notification sounds | Implemented; audible device retest pending | 12 original self-hosted stereo WAV chimes for join/leave, waiting requests, unread chat, moderator hand alerts, recording transitions, reconnect and meeting end. More menu includes on/off, volume, join/leave toggle and individual sound previews. Gesture-gated playback, cooldowns, large-room suppression and synthesized fallback; no external audio service. Preview: `/sounds/preview.html` |
-| Participant status indicators | Available | Mute, camera, hand, host badges |
+| Participant status indicators | Available | Zoom-style participant list shows avatar, name/role, mute, camera, hand, host/co-host badges, pin and moderation actions |
 | Media-independent participant roster | Implemented; device retest pending | Approved signaling participants appear even before SFU connection; matching media identities are deduplicated. After a server roster snapshot, stale media cannot add departed/removed attendees back to the count |
 | Network quality indicator | Available | Shown in the meeting header |
 | Responsive mobile layout | Available | Verified down to 320 px |

@@ -593,6 +593,12 @@ export default function RoomPage() {
     || userName.toLowerCase().includes(normalizedParticipantSearch);
   const roomLabel = roomId.slice(0, 8);
   const stageLabel = pinnedId ? (stageSelection === 'local' ? 'You' : 'Pinned participant') : null;
+  const stageName = stageSelection === 'local'
+    ? `You${isHost ? ' (Host)' : ''}`
+    : pinnedPeer?.userData?.name || 'Guest';
+  const stageMicOn = stageSelection === 'local'
+    ? isMicOn
+    : Boolean(pinnedPeer?.stream?.getAudioTracks().length);
 
   const toggleFullscreen = async () => {
     try {
@@ -1240,21 +1246,24 @@ export default function RoomPage() {
                   ) : null}
 
                   {showLocalParticipant ? (
-                    <div className="flex min-h-16 items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.06]">
-                      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-700 text-sm font-semibold">
+                    <div className="flex min-h-14 items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.06]">
+                      <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-700 text-sm font-semibold text-white">
                         {userName.charAt(0).toUpperCase() || 'Y'}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-medium">{userName} <span className="text-white/45">(You)</span></p>
+                          <p className="truncate text-sm font-medium text-white">{userName} <span className="text-white/45">(You)</span></p>
                           {isHost ? <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">HOST</span> : null}
                         </div>
-                        <p className="mt-0.5 truncate text-xs text-white/40">{isHandRaised ? 'Hand raised' : isMicOn ? 'Microphone on' : 'Muted'}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-white/40">{isHandRaised ? 'Hand raised' : isMicOn ? 'Microphone on' : 'Muted'}</p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {isHandRaised ? <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-300" title="Hand raised"><Hand className="h-4 w-4" /></span> : null}
-                        <span className={`flex h-8 w-8 items-center justify-center rounded-full ${isMicOn ? 'text-white/55' : 'bg-red-500/10 text-red-300'}`}>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {isHandRaised ? <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/15 text-amber-300" title="Hand raised"><Hand className="h-4 w-4" /></span> : null}
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${isMicOn ? 'text-emerald-300' : 'text-red-300'}`} title={isMicOn ? 'Microphone on' : 'Microphone muted'}>
                           {isMicOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                        </span>
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${isCameraOn ? 'text-emerald-300' : 'text-red-300'}`} title={isCameraOn ? 'Camera on' : 'Camera off'}>
+                          {isCameraOn ? <VideoIcon className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
                         </span>
                         <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-white/55 hover:bg-white/10 hover:text-white" onClick={pinnedId === 'local' ? unpin : pinLocal} title={pinnedId === 'local' ? 'Unpin' : 'Pin'}>
                           {pinnedId === 'local' ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
@@ -1266,19 +1275,28 @@ export default function RoomPage() {
                   {filteredPeers.map((p) => (
                     <div
                       key={p.peerId}
-                      className="flex min-h-16 items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.06]"
+                      className="flex min-h-14 items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.06]"
                     >
-                      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-semibold">
+                      <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-semibold text-white">
                         {p.userData?.name?.charAt(0).toUpperCase() || 'G'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{p.userData?.name || 'Participant'}</p>
-                        <p className="mt-0.5 truncate text-xs text-white/40">
-                          {coHosts.has(p.userId || '') ? 'Co-host' : raisedHands.some((hand) => hand.socketId === p.peerId) ? 'Hand raised' : 'In the meeting'}
+                        <p className="truncate text-sm font-medium text-white">
+                          {p.userData?.name || 'Participant'}
+                          {coHosts.has(p.userId || '') ? <span className="text-white/45"> (Co-host)</span> : null}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-white/40">
+                          {raisedHands.some((hand) => hand.socketId === p.peerId) ? 'Hand raised' : 'In the meeting'}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {raisedHands.some((hand) => hand.socketId === p.peerId) ? <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-300" title="Hand raised"><Hand className="h-4 w-4" /></span> : null}
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {raisedHands.some((hand) => hand.socketId === p.peerId) ? <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/15 text-amber-300" title="Hand raised"><Hand className="h-4 w-4" /></span> : null}
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${p.stream?.getAudioTracks().length ? 'text-emerald-300' : 'text-red-300'}`} title={p.stream?.getAudioTracks().length ? 'Microphone on' : 'Microphone muted'}>
+                          {p.stream?.getAudioTracks().length ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                        </span>
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${p.stream?.getVideoTracks().length ? 'text-emerald-300' : 'text-red-300'}`} title={p.stream?.getVideoTracks().length ? 'Camera on' : 'Camera off'}>
+                          {p.stream?.getVideoTracks().length ? <VideoIcon className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+                        </span>
                         <Select
                           defaultValue="medium"
                           onValueChange={(quality) =>
@@ -1503,14 +1521,14 @@ export default function RoomPage() {
                   autoPlay
                   playsInline
                   muted
-                  className={`w-full h-full object-contain bg-black ${mirrorSelfView && !isScreenSharing ? '-scale-x-100' : ''}`}
+                  className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover'} bg-black ${mirrorSelfView && !isScreenSharing ? '-scale-x-100' : ''}`}
                   onLoadedMetadata={(event) => {
                     stageVideoRef.current = event.currentTarget;
                   }}
                 />
               ) : stageStream && stageStream.getVideoTracks().length > 0 ? (
                 <MeetingVideo userId={pinnedPeer?.userId} stream={stageStream}
-                  screen={Boolean(pinnedPeer?.screenStream)} className="w-full h-full object-contain" />
+                  screen={Boolean(pinnedPeer?.screenStream)} className={`w-full h-full ${pinnedPeer?.screenStream ? 'object-contain' : 'object-cover'} bg-black`} />
               ) : pinnedPeer?.connected ? (
                 <div className="w-full h-full bg-[#08101b]/82 flex items-center justify-center">
                   <div className="text-center">
@@ -1539,6 +1557,13 @@ export default function RoomPage() {
                   </div>
                 ) : null}
               </div>
+
+              {stageSelection ? (
+                <div className="absolute bottom-4 left-4 inline-flex max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-md bg-black/65 px-2.5 py-1.5 text-sm font-medium text-white shadow-lg backdrop-blur-sm">
+                  {stageMicOn ? <Mic className="h-3.5 w-3.5 shrink-0" /> : <MicOff className="h-3.5 w-3.5 shrink-0 text-red-300" />}
+                  <span className="truncate">{stageName}</span>
+                </div>
+              ) : null}
 
               <div className="absolute top-4 right-4 flex items-center gap-2">
                 <Button
@@ -1620,7 +1645,7 @@ export default function RoomPage() {
                     autoPlay
                     playsInline
                     muted
-                    className={`h-full w-full object-contain bg-black ${mirrorSelfView ? '-scale-x-100' : ''}`}
+                    className={`h-full w-full object-cover bg-black ${mirrorSelfView ? '-scale-x-100' : ''}`}
                   />
                   {!isCameraOn && !isScreenSharing ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-[#111820]">
@@ -1629,11 +1654,9 @@ export default function RoomPage() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/80 via-black/20 to-transparent p-3 pt-12 text-sm font-medium">
-                    <span>You {isHost ? '(Host)' : ''}</span>
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-full ${isMicOn ? 'bg-black/45' : 'bg-red-600'}`}>
-                      {isMicOn ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
-                    </span>
+                  <div className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
+                    {isMicOn ? <Mic className="h-3.5 w-3.5 shrink-0" /> : <MicOff className="h-3.5 w-3.5 shrink-0 text-red-300" />}
+                    <span className="truncate">You {isHost ? '(Host)' : ''}</span>
                   </div>
                   {pinnedId === 'local' ? (
                     <div className="absolute top-3 right-3 rounded-full border border-white/10 bg-black/45 p-1.5 text-white">
@@ -1652,7 +1675,7 @@ export default function RoomPage() {
                     onClick={() => pinPeer(peerConn.peerId)}
                   >
                     {stream && stream.getVideoTracks().length > 0 ? (
-                      <MeetingVideo userId={peerConn.userId} stream={stream} className="w-full h-full object-contain bg-black" />
+                      <MeetingVideo userId={peerConn.userId} stream={stream} className="w-full h-full object-cover bg-black" />
                     ) : peerConn.connected ? (
                       <div className="w-full h-full bg-[#08101b] flex flex-col items-center justify-center">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 mb-2">
@@ -1667,8 +1690,9 @@ export default function RoomPage() {
                       </div>
                     )}
 
-                    <div className="absolute inset-x-0 bottom-0 max-w-full truncate bg-gradient-to-t from-black/80 via-black/20 to-transparent p-3 pt-12 text-sm font-medium">
-                      {peerConn.userData?.name || `Guest ${index + 1}`}
+                    <div className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
+                      {peerConn.stream?.getAudioTracks().length ? <Mic className="h-3.5 w-3.5 shrink-0" /> : <MicOff className="h-3.5 w-3.5 shrink-0 text-red-300" />}
+                      <span className="truncate">{peerConn.userData?.name || `Guest ${index + 1}`}</span>
                     </div>
 
                     {pinnedId === peerConn.peerId ? (
@@ -1684,7 +1708,8 @@ export default function RoomPage() {
                     >
                       <MeetingVideo userId={peerConn.userId} screen stream={peerConn.screenStream}
                         className="h-full w-full object-contain" />
-                      <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-xs text-white backdrop-blur-md">
+                      <div className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
+                        <Share2 className="h-3.5 w-3.5 shrink-0" />
                         {peerConn.userData?.name || `Guest ${index + 1}`} · Presenting
                       </div>
                     </Card>

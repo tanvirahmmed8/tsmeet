@@ -46,6 +46,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
 ## Meeting layout ও video — handwritten report
 
 - [ ] **BUG-05 — Gallery view / speaker view কাজ করে না**
+  - Local progress (2026-11-26): Gallery, spotlight and floating filmstrip layout options added; pinned participants no longer force thumbnails into the normal document flow. Production/device acceptance pending.
   - Report: gallery/speaker view হয় না।
   - Expected: সমর্থিত layout সঠিকভাবে render হবে এবং view পরিবর্তন করলে participant tiles update হবে।
   - Verify: ২ বা তার বেশি participant দিয়ে view selection ও active-speaker behaviour পরীক্ষা।
@@ -56,6 +57,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
   - Verify: local preview ও remote video আলাদা করে দেখা; join/leave, layout change এবং network-quality change-এর সময় record করা।
 
 - [ ] **BUG-07 — Video size সঠিক নয়**
+  - Local progress (2026-11-26): participant and pinned video boxes use contain framing with stable 16:9 tiles, preventing top/bottom crop; production/device acceptance pending.
   - Report: video size is not correct।
   - Expected: tile viewport-এর মধ্যে থাকবে; aspect ratio অস্বাভাবিকভাবে stretch হবে না এবং controls/name ঢেকে যাবে না।
   - Verify: mobile portrait/landscape, laptop, pinned view ও fullscreen-এ sizing পরীক্ষা।

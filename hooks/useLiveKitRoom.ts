@@ -20,6 +20,11 @@ import { io, type Socket } from 'socket.io-client';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
 import { evaluateNetworkSample, type NetworkAdaptationState, type NetworkTier } from '@/lib/mediaNetworkPolicy';
 import { mergeMeetingParticipants } from '@/lib/meetingParticipants';
+import {
+  readMeetingMediaPreferences,
+  writeMeetingMediaPreferences,
+  type MeetingMediaPreferences,
+} from '@/lib/meetingMediaPreferences';
 import { setMicrophoneEnabledSafely } from '@/lib/microphoneOperation';
 import { useMeetingChat } from './useMeetingChat';
 import { useMeetingSignals } from './useMeetingSignals';
@@ -99,6 +104,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const cameraWantedRef = useRef(false);
   const hostMutedRef = useRef(false);
   const mediaGenerationRef = useRef(0);
+  const mediaPreferencesRef = useRef<MeetingMediaPreferences | null>(null);
   const connectingRef = useRef(false);
   const inboundStatsRef = useRef<Map<string, { packetsReceived: number; packetsLost: number }>>(new Map());
   const outboundStatsRef = useRef<Map<string, { packetsReceived: number; packetsLost: number }>>(new Map());
@@ -129,6 +135,28 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
   const [manualLowDataMode, setManualLowDataMode] = useState(Boolean(config.lowDataMode));
   const [automaticNetworkTier, setAutomaticNetworkTier] = useState<NetworkTier>('excellent');
   const [automaticUplinkTier, setAutomaticUplinkTier] = useState<NetworkTier>('excellent');
+
+  const saveMediaPreferences = useCallback((updates: Partial<MeetingMediaPreferences>) => {
+    const current = mediaPreferencesRef.current || { cameraEnabled: false, microphoneEnabled: false };
+    const next = { ...current, ...updates };
+    mediaPreferencesRef.current = next;
+    writeMeetingMediaPreferences(roomId, userId, next);
+  }, [roomId, userId]);
+
+  useEffect(() => {
+    if (!config.enabled || !userId) return;
+    const preferences = readMeetingMediaPreferences(roomId, userId);
+    mediaPreferencesRef.current = preferences;
+    if (!preferences) return;
+
+    // Restore the desired state before the join approval arrives. The actual
+    // track state is reconciled again after LiveKit connects and permissions
+    // are granted.
+    cameraWantedRef.current = preferences.cameraEnabled;
+    microphoneWantedRef.current = preferences.microphoneEnabled;
+    setIsCameraOn(preferences.cameraEnabled);
+    setIsMicOn(preferences.microphoneEnabled);
+  }, [config.enabled, roomId, userId]);
   const [networkQuality, setNetworkQuality] = useState<NetworkQuality>('Unknown');
   const [coHosts, setCoHosts] = useState<Set<string>>(new Set());
   const isLowDataMode = manualLowDataMode || automaticNetworkTier === 'poor' || automaticNetworkTier === 'critical';
@@ -665,6 +693,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     socket.on('force-mute', async () => {
       hostMutedRef.current = true;
       microphoneWantedRef.current = false;
+      saveMediaPreferences({ microphoneEnabled: false });
       setIsMutedByHost(true); setUnmuteRequested(false);
       try {
         await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
@@ -681,6 +710,8 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     socket.on('unmute-denied', () => { setUnmuteRequested(false); setIsMutedByHost(true); });
     socket.on('force-video-off', async () => {
       await roomRef.current?.localParticipant.setCameraEnabled(false);
+      cameraWantedRef.current = false;
+      saveMediaPreferences({ cameraEnabled: false });
       setIsCameraOn(false); syncLocalStream();
     });
     socket.on('meeting-ended', () => {
@@ -699,7 +730,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       socket.removeAllListeners(); socket.disconnect(); socketRef.current = null;
       disconnectMedia();
     };
-  }, [bindMeetingSignals, config.enabled, config.signalingServer, disconnectMedia, receiveMessage, roomId, syncLocalStream, syncRemoteParticipants, userId]);
+  }, [bindMeetingSignals, config.enabled, config.signalingServer, disconnectMedia, receiveMessage, roomId, saveMediaPreferences, syncLocalStream, syncRemoteParticipants, userId]);
 
   const emit = useCallback((event: string, payload: object) => socketRef.current?.emit(event, payload), []);
   const requestJoin = useCallback((payload: { userName: string; isHost: boolean; roomPassword?: string; userData?: any }) => {
@@ -746,11 +777,12 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
         } else previewVideoRef.current = track;
       } else { previewVideoRef.current?.stop(); previewVideoRef.current = null; }
       cameraWantedRef.current = enabled;
+      saveMediaPreferences({ cameraEnabled: enabled });
       setIsCameraOn(enabled); syncLocalStream(participant || undefined); setError(null);
       if (enabled && backgroundMode !== 'none') await applyBackground(backgroundMode, backgroundImage);
     } catch { setError('Camera access failed. Check permission or select another camera.'); }
     finally { cameraBusyRef.current = false; }
-  }, [applyBackground, backgroundImage, backgroundMode, syncLocalStream]);
+  }, [applyBackground, backgroundImage, backgroundMode, saveMediaPreferences, syncLocalStream]);
   const toggleMicrophone = useCallback(async () => {
     if (hostMutedRef.current || microphoneBusyRef.current) return;
     microphoneBusyRef.current = true;
@@ -776,6 +808,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       } else { previewAudioRef.current?.stop(); previewAudioRef.current = null; }
       if (!isCurrentAndAllowed()) return;
       microphoneWantedRef.current = enabled;
+      saveMediaPreferences({ microphoneEnabled: enabled });
       setIsMicOn(enabled); syncLocalStream(participant || undefined); setError(null);
     }
     catch {
@@ -785,7 +818,7 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       }
     }
     finally { microphoneBusyRef.current = false; }
-  }, [syncLocalStream]);
+  }, [saveMediaPreferences, syncLocalStream]);
   const toggleScreenShare = useCallback(async (includeDeviceAudio = false) => {
     const participant = roomRef.current?.localParticipant;
     if (!participant || screenShareBusyRef.current) return;

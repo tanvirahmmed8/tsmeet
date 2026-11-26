@@ -1,0 +1,54 @@
+image: node:22-bookworm
+
+stages:
+  - validate
+  - security
+
+variables:
+  PNPM_HOME: "$CI_PROJECT_DIR/.pnpm"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key:
+    files:
+      - pnpm-lock.yaml
+      - server/pnpm-lock.yaml
+  paths:
+    - .pnpm-store/
+    - .npm/
+
+before_script:
+  - corepack enable
+  - corepack prepare pnpm@10.28.0 --activate
+  - pnpm config set store-dir "$CI_PROJECT_DIR/.pnpm-store"
+
+validate:
+  stage: validate
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm --dir server install --frozen-lockfile
+    - pnpm lint
+    - pnpm typecheck
+    - pnpm test
+    - pnpm test:safari
+    - pnpm test:dependencies
+    - pnpm test:meeting-ui
+    - pnpm test:chat
+    - pnpm build
+
+dependency-audit:
+  stage: security
+  script:
+    - pnpm install --frozen-lockfile
+    - pnpm --dir server install --frozen-lockfile
+    - pnpm audit --audit-level high
+    - pnpm --dir server audit --audit-level high
+    - npm --prefix server audit --package-lock-only --audit-level high
+
+trivy:
+  stage: security
+  image:
+    name: aquasec/trivy:0.68.0
+    entrypoint: [""]
+  script:
+    - trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress .
