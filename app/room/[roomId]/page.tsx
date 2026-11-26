@@ -70,6 +70,7 @@ import {
   Volume2,
   GripVertical,
   Circle,
+  Check,
   Pause,
   Play,
   Square,
@@ -127,7 +128,9 @@ export default function RoomPage() {
   const [clientIdentityReady, setClientIdentityReady] = useState(false);
 
   const [hideSelf, setHideSelf] = useState(false);
+  const [mirrorSelfView, setMirrorSelfView] = useState(true);
   const [pinnedId, setPinnedId] = useState<string | null>(null); // 'local' | peerId | null
+  const [layoutMode, setLayoutMode] = useState<'gallery' | 'spotlight' | 'floating'>('gallery');
   const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
     const [hostPanelCompact, setHostPanelCompact] = useState(false);
   const [hostPanelPosition, setHostPanelPosition] = useState({ x: 0, y: 0 });
@@ -600,9 +603,9 @@ export default function RoomPage() {
     }
   };
 
-  const pinLocal = () => setPinnedId('local');
-  const pinPeer = (peerId: string) => setPinnedId(peerId);
-  const unpin = () => setPinnedId(null);
+  const pinLocal = () => { setPinnedId('local'); setLayoutMode('spotlight'); };
+  const pinPeer = (peerId: string) => { setPinnedId(peerId); setLayoutMode('spotlight'); };
+  const unpin = () => { setPinnedId(null); setLayoutMode('gallery'); };
   const startHostPanelDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     hostPanelDraggingRef.current = true;
     hostPanelDragOffsetRef.current = {
@@ -680,12 +683,14 @@ export default function RoomPage() {
   const handleMicrophoneSelect = async (deviceId: string) => {
     setSelectedMicrophoneId(deviceId);
     setAudioSettingsError(null);
+    setAudioSettingsOpen(false);
     await switchMicrophoneInput(deviceId);
   };
 
   const handleSpeakerSelect = async (deviceId: string) => {
     setSelectedSpeakerId(deviceId);
     setAudioSettingsError(null);
+    setAudioSettingsOpen(false);
   };
 
   const handleCameraSelect = async (deviceId: string) => {
@@ -698,18 +703,6 @@ export default function RoomPage() {
     microphoneDevices.find((device) => device.deviceId === selectedMicrophoneId)?.label ||
     microphoneDevices[0]?.label ||
     'Microphone';
-  const selectedMicrophoneValue = microphoneDevices.some(
-    (device) => device.deviceId === selectedMicrophoneId
-  )
-    ? selectedMicrophoneId
-    : undefined;
-  const selectedSpeakerLabel =
-    speakerDevices.find((device) => device.deviceId === selectedSpeakerId)?.label ||
-    speakerDevices[0]?.label ||
-    'Speakers';
-  const selectedSpeakerValue = speakerDevices.some((device) => device.deviceId === selectedSpeakerId)
-    ? selectedSpeakerId
-    : undefined;
   const selectedCameraLabel =
     cameraDevices.find((device) => device.deviceId === selectedCameraId)?.label ||
     cameraDevices[0]?.label ||
@@ -1400,7 +1393,7 @@ export default function RoomPage() {
                       autoPlay
                       playsInline
                       muted
-                      className="w-full h-full object-cover -scale-x-100"
+                      className={`w-full h-full object-cover ${mirrorSelfView ? '-scale-x-100' : ''}`}
                       ref={(el) => {
                         if (el && localStream && el.srcObject !== localStream) {
                           el.srcObject = localStream;
@@ -1510,7 +1503,7 @@ export default function RoomPage() {
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-contain bg-black ${mirrorSelfView && !isScreenSharing ? '-scale-x-100' : ''}`}
                   onLoadedMetadata={(event) => {
                     stageVideoRef.current = event.currentTarget;
                   }}
@@ -1615,11 +1608,11 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className={`mx-auto w-full max-w-[1600px] ${pinnedId ? 'shrink-0' : 'flex min-h-0 flex-1 items-center'}`}>
-            <div className={pinnedId ? 'flex w-full gap-3 overflow-x-auto pb-2' : `grid w-full content-center gap-3 ${participantCount <= 1 ? 'grid-cols-1' : participantCount <= 4 ? 'grid-cols-1 sm:grid-cols-2' : participantCount <= 9 ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
+          <div className={`mx-auto w-full max-w-[1600px] ${pinnedId && layoutMode === 'floating' ? 'pointer-events-none absolute bottom-4 right-4 z-20 max-w-[min(62vw,720px)]' : pinnedId ? 'shrink-0' : 'flex min-h-0 flex-1 items-center'}`}>
+            <div className={pinnedId ? `pointer-events-auto flex max-w-full gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/75 p-2 shadow-2xl backdrop-blur-xl ${layoutMode === 'floating' ? 'max-h-[30vh]' : 'w-full pb-2'}` : `grid w-full content-center gap-3 ${participantCount <= 1 ? 'grid-cols-1' : participantCount <= 4 ? 'grid-cols-1 sm:grid-cols-2' : participantCount <= 9 ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
               {!hideSelf && (
                 <Card
-                  className={`relative mx-auto aspect-video cursor-pointer overflow-hidden rounded-2xl border bg-[#101820] shadow-none transition ${activeSpeakerId === 'local' ? 'border-emerald-400 ring-2 ring-emerald-400/30' : 'border-white/10'} ${pinnedId ? 'w-56 shrink-0' : participantCount === 1 ? 'w-full max-w-5xl' : 'w-full'}`}
+                    className={`relative mx-auto aspect-video cursor-pointer overflow-hidden rounded-2xl border bg-[#101820] shadow-none transition ${activeSpeakerId === 'local' ? 'border-emerald-400 ring-2 ring-emerald-400/30' : 'border-white/10'} ${pinnedId ? 'w-52 shrink-0' : participantCount === 1 ? 'w-full max-w-5xl' : 'w-full'}`}
                   onClick={pinLocal}
                 >
                   <video
@@ -1627,7 +1620,7 @@ export default function RoomPage() {
                     autoPlay
                     playsInline
                     muted
-                    className="h-full w-full -scale-x-100 object-cover"
+                    className={`h-full w-full object-contain bg-black ${mirrorSelfView ? '-scale-x-100' : ''}`}
                   />
                   {!isCameraOn && !isScreenSharing ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-[#111820]">
@@ -1655,11 +1648,11 @@ export default function RoomPage() {
                 return (
                   <React.Fragment key={peerConn.peerId}>
                   <Card
-                    className={`relative mx-auto aspect-video cursor-pointer overflow-hidden rounded-2xl border bg-[#101820] shadow-none transition ${activeSpeakerId === peerConn.peerId ? 'border-emerald-400 ring-2 ring-emerald-400/30' : 'border-white/10'} ${pinnedId ? 'w-56 shrink-0' : 'w-full'}`}
+                    className={`relative mx-auto aspect-video cursor-pointer overflow-hidden rounded-2xl border bg-[#101820] shadow-none transition ${activeSpeakerId === peerConn.peerId ? 'border-emerald-400 ring-2 ring-emerald-400/30' : 'border-white/10'} ${pinnedId ? 'w-52 shrink-0' : 'w-full'}`}
                     onClick={() => pinPeer(peerConn.peerId)}
                   >
                     {stream && stream.getVideoTracks().length > 0 ? (
-                      <MeetingVideo userId={peerConn.userId} stream={stream} className="w-full h-full object-cover" />
+                      <MeetingVideo userId={peerConn.userId} stream={stream} className="w-full h-full object-contain bg-black" />
                     ) : peerConn.connected ? (
                       <div className="w-full h-full bg-[#08101b] flex flex-col items-center justify-center">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 mb-2">
@@ -1686,7 +1679,7 @@ export default function RoomPage() {
                   </Card>
                   {peerConn.screenStream?.getVideoTracks().length ? (
                     <Card
-                      className="relative aspect-video w-80 shrink-0 cursor-pointer overflow-hidden rounded-[22px] border border-cyan-400/30 bg-[#08101b]"
+                      className="relative aspect-video w-56 shrink-0 cursor-pointer overflow-hidden rounded-[22px] border border-cyan-400/30 bg-[#08101b]"
                       onClick={() => pinPeer(peerConn.peerId)}
                     >
                       <MeetingVideo userId={peerConn.userId} screen stream={peerConn.screenStream}
@@ -1968,63 +1961,100 @@ export default function RoomPage() {
         ) : null}
 
         {audioSettingsOpen ? (
-          <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-[28px] border border-white/10 bg-white/5 p-3 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.7)]">
-            <div className="min-w-0">
-              <Select value={selectedMicrophoneValue} onValueChange={handleMicrophoneSelect}>
-                <SelectTrigger className="h-12 w-full rounded-full border-white/10 bg-transparent text-white" title={selectedMicrophoneLabel}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                    <Mic className="h-4 w-4 shrink-0 text-white/70" />
-                    <span className="min-w-0 flex-1 truncate text-left"><SelectValue placeholder="Select microphone" /></span>
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="border-white/10 bg-slate-950 text-white">
-                  {microphoneDevices.length > 0 ? (
-                    microphoneDevices.map((device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId}>
-                        {device.label || `Microphone ${device.deviceId.slice(0, 6)}`}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-white/60">
-                      No microphone detected. Check browser site permissions.
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+          <div className="absolute bottom-[68px] left-1/2 z-50 w-[min(390px,calc(100vw-24px))] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/98 p-2 text-white shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between px-3 py-2">
+              <div>
+                <p className="text-sm font-semibold">Audio</p>
+                <p className="text-xs text-white/45">Choose your microphone and speaker</p>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 rounded-full text-white/55 hover:bg-white/10 hover:text-white"
+                onClick={() => setAudioSettingsOpen(false)}
+                title="Close audio menu"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
             </div>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              className="row-span-2 h-12 w-12 self-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
-              onClick={() => setAudioSettingsOpen(false)}
-              title="Collapse audio settings"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
+            <div className="border-t border-white/10 px-1 pt-2">
+              <p className="px-2 pb-1 text-xs font-semibold text-white/60">Select a Microphone</p>
+              <div role="group" aria-label="Select a microphone" className="space-y-0.5">
+                {microphoneDevices.filter((device) => device.deviceId !== 'default').map((device) => {
+                  const selected = selectedMicrophoneId === device.deviceId;
+                  return (
+                    <button
+                      key={device.deviceId}
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10"
+                      onClick={() => void handleMicrophoneSelect(device.deviceId)}
+                      title={device.label || 'Microphone'}
+                    >
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{selected ? <Check className="h-4 w-4" /> : null}</span>
+                      <Mic className="h-4 w-4 shrink-0 text-white/65" />
+                      <span className="min-w-0 flex-1 truncate">{device.label || `Microphone ${device.deviceId.slice(0, 6)}`}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10"
+                  onClick={() => void handleMicrophoneSelect('default')}
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">{selectedMicrophoneId === 'default' ? <Check className="h-4 w-4" /> : null}</span>
+                  <Mic className="h-4 w-4 shrink-0 text-white/65" />
+                  <span className="min-w-0 flex-1 truncate">Same as System</span>
+                </button>
+                {microphoneDevices.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-white/50">No microphone detected. Check browser permissions.</p>
+                ) : null}
+              </div>
+            </div>
 
-            <div className="min-w-0">
-              <Select value={selectedSpeakerValue} onValueChange={handleSpeakerSelect}>
-                <SelectTrigger className="h-12 w-full rounded-full border-white/10 bg-transparent text-white" title={selectedSpeakerLabel}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                    <Volume2 className="h-4 w-4 shrink-0 text-white/70" />
-                    <span className="min-w-0 flex-1 truncate text-left"><SelectValue placeholder="Select speakers" /></span>
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="border-white/10 bg-slate-950 text-white">
-                  {speakerDevices.length > 0 ? (
-                    speakerDevices.map((device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId}>
-                        {device.label || `Speaker ${device.deviceId.slice(0, 6)}`}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-white/60">
-                      No selectable speaker output is available in this browser.
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+            <div className="mt-2 border-t border-white/10 px-1 pt-2">
+              <p className="px-2 pb-1 text-xs font-semibold text-white/60">Select a Speaker</p>
+              <div role="group" aria-label="Select a speaker" className="space-y-0.5">
+                {speakerDevices.filter((device) => device.deviceId !== 'default').map((device) => {
+                  const selected = selectedSpeakerId === device.deviceId;
+                  return (
+                    <button
+                      key={device.deviceId}
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10"
+                      onClick={() => void handleSpeakerSelect(device.deviceId)}
+                      title={device.label || 'Speaker'}
+                    >
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{selected ? <Check className="h-4 w-4" /> : null}</span>
+                      <Volume2 className="h-4 w-4 shrink-0 text-white/65" />
+                      <span className="min-w-0 flex-1 truncate">{device.label || `Speaker ${device.deviceId.slice(0, 6)}`}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10"
+                  onClick={() => void handleSpeakerSelect('default')}
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">{selectedSpeakerId === 'default' ? <Check className="h-4 w-4" /> : null}</span>
+                  <Volume2 className="h-4 w-4 shrink-0 text-white/65" />
+                  <span className="min-w-0 flex-1 truncate">Same as System</span>
+                </button>
+                {speakerDevices.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-white/50">Speaker selection is not available in this browser.</p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-2 border-t border-white/10 pt-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-white/80 hover:bg-white/10 hover:text-white"
+                onClick={() => setAudioSettingsOpen(false)}
+              >
+                <Settings className="h-4 w-4 text-white/65" />
+                <span>Audio settings</span>
+              </button>
             </div>
           </div>
         ) : null}
@@ -2060,6 +2090,8 @@ export default function RoomPage() {
             variant="outline"
             className="hidden h-10 w-8 rounded-full border-0 bg-transparent px-0 text-white/65 hover:bg-white/10 hover:text-white sm:flex"
             title={audioSettingsOpen ? 'Hide audio settings' : 'Show audio settings'}
+            aria-label={audioSettingsOpen ? 'Hide audio settings' : 'Show audio settings'}
+            aria-expanded={audioSettingsOpen}
           >
             {audioSettingsOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
           </Button>
@@ -2124,38 +2156,17 @@ export default function RoomPage() {
                 <span className="hidden sm:inline">Stop sharing</span>
               </Button>
             ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    disabled={isScreenShareBusy}
-                    className="h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white"
-                    title="Share screen or window"
-                  >
-                    <Share2 className="h-5 w-5" />
-                    <span className="ml-2 hidden sm:inline">Share</span>
-                    <ChevronDown className="ml-1 h-4 w-4 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" sideOffset={10} className="w-72">
-                  <DropdownMenuLabel>Choose what to share</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => void toggleScreenShare(false)} className="items-start gap-3 py-3">
-                    <Share2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span className="flex flex-col gap-0.5">
-                      <span>Screen or window</span>
-                      <span className="text-xs text-muted-foreground">Share without computer audio</span>
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void toggleScreenShare(true)} className="items-start gap-3 py-3">
-                    <Volume2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span className="flex flex-col gap-0.5">
-                      <span>Screen with system audio</span>
-                      <span className="text-xs text-muted-foreground">Audio depends on browser and source</span>
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                onClick={() => void toggleScreenShare(true)}
+                size="lg"
+                variant="outline"
+                disabled={isScreenShareBusy}
+                className="h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white"
+                title="Share screen or window"
+              >
+                <Share2 className="h-5 w-5" />
+                <span className="ml-2 hidden sm:inline">Share screen</span>
+              </Button>
             )}
 
             <Button
@@ -2207,6 +2218,10 @@ export default function RoomPage() {
                   {hideSelf ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   {hideSelf ? 'Show my tile' : 'Hide my tile'}
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setMirrorSelfView((current) => !current)}>
+                  <VideoIcon className="h-4 w-4" />
+                  Mirror my video: {mirrorSelfView ? 'On' : 'Off'}
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setIsLowDataMode(!isLowDataMode)}><Signal className="h-4 w-4" /> Low data mode: {isLowDataMode ? 'On' : 'Off'}</DropdownMenuItem>
                 <DropdownMenuItem className="sm:hidden" onSelect={() => { setVideoSettingsOpen(false); setAudioSettingsOpen(true); }}><Mic className="h-4 w-4" /> Audio settings</DropdownMenuItem>
                 <DropdownMenuItem className="sm:hidden" onSelect={() => { setAudioSettingsOpen(false); setVideoSettingsOpen(true); }}><VideoIcon className="h-4 w-4" /> Video options</DropdownMenuItem>
@@ -2216,6 +2231,17 @@ export default function RoomPage() {
                 <DropdownMenuItem onSelect={() => void toggleFullscreen()}>
                   {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                   {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Layout</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => { setLayoutMode('gallery'); setPinnedId(null); }}>
+                  Gallery view
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setLayoutMode('spotlight')} disabled={!pinnedId}>
+                  Spotlight view
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setLayoutMode('floating')} disabled={!pinnedId}>
+                  Floating filmstrip
                 </DropdownMenuItem>
                 {isModerator ? (
                   <>
