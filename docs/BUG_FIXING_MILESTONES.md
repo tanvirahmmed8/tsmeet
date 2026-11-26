@@ -214,10 +214,10 @@ Status: Not started. Estimate: **6–10 h**.
 
 ### M14 — GAP-04: Co-host control visibility
 
-Status: Not started. Estimate: **4.5–8.5 h**.
+Status: Local role synchronization and moderator UI implementation complete (2026-11-26); production/reconnect acceptance pending. M14 remains open. Estimate: **4.5–8.5 h**.
 
 - [ ] **Step 1 — Verify (1–2 h):** Host + eligible admitted user দিয়ে local menu ও permissions verify; server-only হলে persisted role/authorization এবং deployed version পরীক্ষা। ফলাফলে classification, reproduction steps, local/server difference ও evidence লিখতে হবে।
-- [ ] **Step 2 — Fix (2–4 h):** Confirmed role/UI bug fix; backend authoritative permissions বজায় রাখা। Relevant regression test ও local checks চালিয়ে result লিখতে হবে।
+- [x] **Step 2 — Fix (2–4 h):** Join approval now includes the authoritative `role`; reconnecting co-hosts restore moderator state; host transfer preserves the previous host as co-host; co-hosts see mute/remove/manage controls while host-only lock, recording, transfer and role assignment stay restricted. Backend authorization remains authoritative. Typecheck and targeted lint validation are required before release; production/reconnect acceptance pending.
 - [ ] **Step 3 — Local commit → server commands → retest (1.5–2.5 h):** নিচের release procedure অনুযায়ী scoped commit/push commands, প্রয়োজনীয় native server deployment/restart commands এবং rollback instructions দিতে হবে। Commit/build deployed হয়েছে confirm করে test: Host co-host assign/remove করতে পারেন; co-host permissions কাজ করে; সাধারণ guest unauthorized action করতে পারেন না। Result ও commit reference record হলে step complete।
 
 ### M15 — BUG-09: Self-view mirror preference

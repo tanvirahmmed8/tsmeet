@@ -586,6 +586,10 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
     setIsCameraOn(false);
     setIsMicOn(false);
     setIsScreenSharing(false);
+    setIsHost(false);
+    setCoHosts(new Set());
+    setPendingRequests([]);
+    setUnmuteRequests([]);
   }, []);
 
   useEffect(() => {
@@ -617,6 +621,12 @@ export function useLiveKitRoom(roomId: string, userId: string, config: LiveKitCo
       approvedRef.current = true;
       setJoinStatus('approved');
       setIsHost(Boolean(data?.isHost));
+      setCoHosts((current) => {
+        const next = new Set(current);
+        if (data?.role === 'co-host') next.add(String(userId));
+        else next.delete(String(userId));
+        return next;
+      });
       try { await connectToLiveKitRef.current(); } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to connect media');
       }

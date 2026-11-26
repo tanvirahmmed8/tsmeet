@@ -116,6 +116,7 @@ Execution plan: [BUG_FIXING_MILESTONES.md](BUG_FIXING_MILESTONES.md) — প্�
   - Next step: recording enable করার সময় Egress/storage, host control visibility, consent, start/stop এবং playback যাচাই করা।
 
 - [ ] **GAP-04 — Co-host option missing**
+  - Local progress (2026-11-26): Server now sends the authoritative role during join approval, preserves host-transfer co-host state, and moderator controls are visible to co-hosts while host-only actions remain restricted. Production/reconnect/device acceptance pending.
   - Report: co-host option দেখা যাচ্ছে না।
   - Expected: authorized host eligible participant-এর co-host controls দেখতে ও ব্যবহার করতে পারবেন।
   - Verify: host account, অন্য admitted participant, participant menu এবং mobile/desktop control visibility পরীক্ষা; missing feature নাকি role/UI issue তা নির্ধারণ।

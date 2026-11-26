@@ -795,7 +795,7 @@ participants of that room before acting, and writes a `security_audit_logs` row.
 | Event | Payload |
 |---|---|
 | `join-pending` | `{ roomId, waitingForHost }` |
-| `join-approved` | `{ roomId, isHost, iceServers }` — `iceServers` is `[]` unless the room uses mesh |
+| `join-approved` | `{ roomId, isHost, role, iceServers }` — `role` is `host`, `co-host`, or `guest`; `iceServers` is `[]` unless the room uses mesh |
 | `join-denied` | `{ roomId, message }` |
 | `join-request` | `{ roomId, socketId, userId, userData }` — sent to the host |
 | `password-required` | `{ roomId }` |

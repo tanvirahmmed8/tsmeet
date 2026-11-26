@@ -333,6 +333,7 @@ io.on('connection', (socket) => {
         socket.emit('join-approved', {
           roomId,
           isHost: true,
+          role: 'host',
           iceServers: mediaProviderForRoom(roomId) === 'mesh' ? meshIceServersFromEnvironment() : [],
         });
 
@@ -427,9 +428,11 @@ io.on('connection', (socket) => {
     targetSocket.join(roomId);
     roomManager.addUserToRoom(roomId, pending.userId, targetSocketId, pending.userData);
 
+    const assignedRole = persistedRole.rows[0]?.role === 'co-host' ? 'co-host' : 'guest';
     targetSocket.emit('join-approved', {
       roomId,
       isHost: false,
+      role: assignedRole,
       iceServers: mediaProviderForRoom(roomId) === 'mesh' ? meshIceServersFromEnvironment() : [],
     });
 
@@ -599,6 +602,11 @@ io.on('connection', (socket) => {
       updateLiveKitRole(roomId, String(host.userId), 'co-host'),
       updateLiveKitRole(roomId, nextHost.userId, 'host'),
     ]).catch((error) => console.warn(`[Room ${roomId}] LiveKit host transfer sync failed`, error));
+
+    roomManager.addCoHost(roomId, String(host.userId));
+    roomManager.removeCoHost(roomId, nextHost.userId);
+    io.to(roomId).emit('cohost-promoted', { userId: String(host.userId), socketId: host.socketId });
+    io.to(roomId).emit('cohost-demoted', { userId: nextHost.userId, socketId: nextHost.socketId });
 
     emitHostChange(roomId, nextHost.socketId, nextHost.userId);
     audit(roomId, 'role.host_transferred', nextHost.userId);

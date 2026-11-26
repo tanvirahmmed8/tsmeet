@@ -393,6 +393,10 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
     approvedRef.current = false;
     selfSocketIdRef.current = null;
     setLocalStream(null);
+    setIsHost(false);
+    setCoHosts(new Set());
+    setPendingRequests([]);
+    setUnmuteRequests([]);
   }, [roomId, userId]);
 
   // Initialize socket connection
@@ -445,6 +449,12 @@ export const useWebRTC = (roomId: string, userId: string, config: WebRTCConfig) 
         approvedRef.current = true;
         setJoinStatus('approved');
         setIsHost(Boolean(data?.isHost));
+        setCoHosts((current) => {
+          const next = new Set(current);
+          if (data?.role === 'co-host') next.add(String(userId));
+          else next.delete(String(userId));
+          return next;
+        });
         setError(null);
       });
 

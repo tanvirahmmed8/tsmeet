@@ -242,6 +242,7 @@ export default function RoomPage() {
     activeSpeakerId,
   });
 
+  const isModerator = isHost || coHosts.has(userId);
   const notificationSounds = useMeetingSounds(roomId, {
     approved: joinStatus === 'approved', ready: rosterReady,
     moderator: isHost || coHosts.has(userId), selfId: userId,
@@ -1105,7 +1106,7 @@ export default function RoomPage() {
                   >
                     <UserPlus className="mr-2 h-4 w-4" /> Invite
                   </Button>
-                  {isHost ? (
+                  {isModerator ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1151,7 +1152,7 @@ export default function RoomPage() {
               <ScrollArea className="mt-2 min-h-0 flex-1 px-4 pb-4">
                 <div className="space-y-2">
 
-                  {isHost && unmuteRequests.length > 0 ? (
+                  {isModerator && unmuteRequests.length > 0 ? (
                     <Card className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-white shadow-none">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1313,7 +1314,7 @@ export default function RoomPage() {
                         >
                           {pinnedId === p.peerId ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                         </Button>
-                        {isHost ? (
+                        {isModerator ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-white/55 hover:bg-white/10 hover:text-white" title="Participant actions">
@@ -1323,11 +1324,13 @@ export default function RoomPage() {
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem onSelect={() => hostMute(p.peerId)}><MicOff className="h-4 w-4" /> Mute participant</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => hostStopVideo(p.peerId)}><VideoOff className="h-4 w-4" /> Stop video</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => transferHost(p.peerId)}><Crown className="h-4 w-4" /> Make host</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => coHosts.has(p.userId || '') ? demoteFromCoHost(p.peerId) : promoteToCoHost(p.peerId)}>
-                                {coHosts.has(p.userId || '') ? <ShieldOff className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-                                {coHosts.has(p.userId || '') ? 'Remove co-host' : 'Make co-host'}
-                              </DropdownMenuItem>
+                              {isHost ? <DropdownMenuItem onSelect={() => transferHost(p.peerId)}><Crown className="h-4 w-4" /> Make host</DropdownMenuItem> : null}
+                              {isHost ? (
+                                <DropdownMenuItem onSelect={() => coHosts.has(p.userId || '') ? demoteFromCoHost(p.peerId) : promoteToCoHost(p.peerId)}>
+                                  {coHosts.has(p.userId || '') ? <ShieldOff className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+                                  {coHosts.has(p.userId || '') ? 'Remove co-host' : 'Make co-host'}
+                                </DropdownMenuItem>
+                              ) : null}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-red-400 focus:text-red-300" onSelect={() => removeParticipant(p.peerId)}><UserMinus className="h-4 w-4" /> Remove from meeting</DropdownMenuItem>
                             </DropdownMenuContent>
@@ -2214,19 +2217,24 @@ export default function RoomPage() {
                   {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                   {isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 </DropdownMenuItem>
-                {isHost ? (
+                {isModerator ? (
                   <>
                     <DropdownMenuSeparator className="sm:hidden" />
-                    <DropdownMenuLabel className="sm:hidden">Host and recording</DropdownMenuLabel>
+                    <DropdownMenuLabel className="sm:hidden">{isHost ? 'Host and recording' : 'Moderator controls'}</DropdownMenuLabel>
                     <DropdownMenuItem className="sm:hidden" onSelect={() => hostMuteAll()}><MicOff className="h-4 w-4" /> Mute everyone</DropdownMenuItem>
-                    <DropdownMenuItem className="sm:hidden" onSelect={() => setMeetingLocked(!isMeetingLocked)}>
-                      {isMeetingLocked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                      {isMeetingLocked ? 'Unlock meeting' : 'Lock meeting'}
-                    </DropdownMenuItem>
-                    {(recordingStatus === 'idle' || recordingStatus === 'failed') ? <DropdownMenuItem className="sm:hidden" onSelect={startRecording}><Circle className="h-4 w-4 text-red-500" /> Start recording</DropdownMenuItem> : null}
-                    {recordingStatus === 'recording' ? <DropdownMenuItem className="sm:hidden" onSelect={pauseRecording}><Pause className="h-4 w-4" /> Pause recording</DropdownMenuItem> : null}
-                    {recordingStatus === 'paused' ? <DropdownMenuItem className="sm:hidden" onSelect={resumeRecording}><Play className="h-4 w-4" /> Resume recording</DropdownMenuItem> : null}
-                    {['awaiting_recorder', 'recording', 'paused'].includes(recordingStatus) ? <DropdownMenuItem className="sm:hidden" onSelect={stopRecording}><Square className="h-4 w-4" /> Stop recording</DropdownMenuItem> : null}
+                    <DropdownMenuItem className="sm:hidden" onSelect={() => setActiveSidebarTab('participants')}><Users className="h-4 w-4" /> Manage participants</DropdownMenuItem>
+                    {isHost ? (
+                      <>
+                        <DropdownMenuItem className="sm:hidden" onSelect={() => setMeetingLocked(!isMeetingLocked)}>
+                          {isMeetingLocked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                          {isMeetingLocked ? 'Unlock meeting' : 'Lock meeting'}
+                        </DropdownMenuItem>
+                        {(recordingStatus === 'idle' || recordingStatus === 'failed') ? <DropdownMenuItem className="sm:hidden" onSelect={startRecording}><Circle className="h-4 w-4 text-red-500" /> Start recording</DropdownMenuItem> : null}
+                        {recordingStatus === 'recording' ? <DropdownMenuItem className="sm:hidden" onSelect={pauseRecording}><Pause className="h-4 w-4" /> Pause recording</DropdownMenuItem> : null}
+                        {recordingStatus === 'paused' ? <DropdownMenuItem className="sm:hidden" onSelect={resumeRecording}><Play className="h-4 w-4" /> Resume recording</DropdownMenuItem> : null}
+                        {['awaiting_recorder', 'recording', 'paused'].includes(recordingStatus) ? <DropdownMenuItem className="sm:hidden" onSelect={stopRecording}><Square className="h-4 w-4" /> Stop recording</DropdownMenuItem> : null}
+                      </>
+                    ) : null}
                   </>
                 ) : null}
                 <DropdownMenuSeparator />
@@ -2235,26 +2243,28 @@ export default function RoomPage() {
             </DropdownMenu>
           </div>
 
-          {isHost ? (
+          {isModerator ? (
             <div className="flex shrink-0 items-center gap-1 border-l border-white/10 pl-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="lg" variant="outline" className="hidden h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white sm:flex" title="Host controls">
-                    <Shield className="h-5 w-5" /><span className="ml-2 hidden lg:inline">Host</span>
+                    <Shield className="h-5 w-5" /><span className="ml-2 hidden lg:inline">{isHost ? 'Host' : 'Moderator'}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" sideOffset={10} className="w-56">
-                  <DropdownMenuLabel>Host controls</DropdownMenuLabel>
+                   <DropdownMenuLabel>{isHost ? 'Host controls' : 'Moderator controls'}</DropdownMenuLabel>
                   <DropdownMenuItem onSelect={() => hostMuteAll()}><MicOff className="h-4 w-4" /> Mute everyone</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setActiveSidebarTab('participants')}><Users className="h-4 w-4" /> Manage participants</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setMeetingLocked(!isMeetingLocked)}>
-                    {isMeetingLocked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                    {isMeetingLocked ? 'Unlock meeting' : 'Lock meeting'}
-                  </DropdownMenuItem>
+                   {isHost ? (
+                     <DropdownMenuItem onSelect={() => setMeetingLocked(!isMeetingLocked)}>
+                       {isMeetingLocked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                       {isMeetingLocked ? 'Unlock meeting' : 'Lock meeting'}
+                     </DropdownMenuItem>
+                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <DropdownMenu>
+               {isHost ? <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="lg" variant="outline" className={recordingStatus === 'recording' ? 'hidden h-11 rounded-full border-red-500/30 bg-red-500/10 px-3 text-red-200 hover:bg-red-500/20 sm:flex' : 'hidden h-11 rounded-full border-0 bg-white/10 px-3 text-white/80 hover:bg-white/20 hover:text-white sm:flex'} title="Recording controls">
                     <Circle className={`h-4 w-4 ${recordingStatus === 'recording' ? 'fill-red-500 text-red-500' : 'text-red-400'}`} />
@@ -2269,7 +2279,7 @@ export default function RoomPage() {
                   {['awaiting_recorder', 'recording', 'paused'].includes(recordingStatus) ? <DropdownMenuItem onSelect={stopRecording}><Square className="h-4 w-4" /> Stop recording</DropdownMenuItem> : null}
                   {recordingStatus === 'awaiting_recorder' || recordingStatus === 'stopping' ? <DropdownMenuItem disabled>{recordingStatus === 'stopping' ? 'Stopping…' : 'Starting recorder…'}</DropdownMenuItem> : null}
                 </DropdownMenuContent>
-              </DropdownMenu>
+               </DropdownMenu> : null}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2293,10 +2303,12 @@ export default function RoomPage() {
                     <PhoneOff className="h-4 w-4" />
                     <div><p className="font-medium">Leave meeting</p><p className="text-xs text-muted-foreground">The meeting continues without you</p></div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg p-3 text-red-500 focus:text-red-500" onSelect={handleEndMeeting}>
-                    <Square className="h-4 w-4" />
-                    <div><p className="font-medium">End meeting for everyone</p><p className="text-xs text-muted-foreground">Disconnect all participants</p></div>
-                  </DropdownMenuItem>
+                   {isHost ? (
+                     <DropdownMenuItem className="rounded-lg p-3 text-red-500 focus:text-red-500" onSelect={handleEndMeeting}>
+                       <Square className="h-4 w-4" />
+                       <div><p className="font-medium">End meeting for everyone</p><p className="text-xs text-muted-foreground">Disconnect all participants</p></div>
+                     </DropdownMenuItem>
+                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
